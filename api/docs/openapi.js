@@ -1,0 +1,87 @@
+const string = { type: "string" };
+const object = (properties, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
+const body = (schema) => ({ required: true, content: { "application/json": { schema } } });
+const id = { in: "path", name: "id", required: true, schema: { type: "integer", minimum: 1 } };
+const query = [
+  { in: "query", name: "q", schema: string },
+  { in: "query", name: "categoria", schema: string },
+  { in: "query", name: "page", schema: { type: "integer", minimum: 1, default: 1 } },
+  { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 50, default: 6 } },
+];
+const course = object({
+  titulo: string, descripcion: string, categoria: string,
+  nivel: { type: "string", enum: ["basico", "intermedio", "avanzado"] },
+});
+const lesson = object({ titulo: string, contenido: string, videoUrl: string }, ["titulo"]);
+function operation(summary, { auth = false, params = [], schema, status = 200 } = {}) {
+  return {
+    summary, security: auth ? [{ bearerAuth: [] }] : [], parameters: params,
+    ...(schema ? { requestBody: body(schema) } : {}),
+    responses: {
+      [status]: { description: status === 204 ? "Eliminado, sin cuerpo" : "Operación correcta" },
+      401: { $ref: "#/components/responses/Error" }, 403: { $ref: "#/components/responses/Error" },
+      404: { $ref: "#/components/responses/Error" }, 409: { $ref: "#/components/responses/Error" },
+      422: { $ref: "#/components/responses/Error" }, 429: { $ref: "#/components/responses/Error" },
+    },
+  };
+}
+
+export const openapi = {
+  openapi: "3.0.3",
+  info: { title: "MiniAula — primera etapa", version: "0.4.0",
+    description: "Autenticación, perfil, catálogo y gestión de cursos y lecciones. Inscripciones, progreso, evaluación de cuestionarios y estadísticas aún NO están implementados. El logout elimina la sesión del cliente; el JWT expira en 2 horas." },
+  servers: [{ url: "/api" }],
+  components: {
+    securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" } },
+    responses: {
+      Error: {
+        description: "Error normalizado",
+        content: {
+          "application/json": {
+            schema: object({ error: object({ code: string, message: string, details: { nullable: true } }) }),
+          },
+        },
+      },
+    },
+  },
+  paths: {
+    "/": { get: operation("Comprobar API") },
+    "/auth/register": { post: operation("Registrarse", { status: 201, schema: object({
+      nombre: string, email: { type: "string", format: "email" },
+      password: { type: "string", minLength: 8, maxLength: 72 },
+      rol: { type: "string", enum: ["estudiante", "instructor"] },
+    }) }) },
+    "/auth/login": { post: operation("Iniciar sesión", { schema: object({ email: string, password: string }) }) },
+    "/users/me": {
+      get: operation("Ver mi perfil", { auth: true }),
+      put: operation("Editar nombre y email (no permite cambiar rol)", {
+        auth: true, schema: object({ nombre: string, email: string }),
+      }),
+    },
+    "/categorias": { get: operation("Categorías de cursos publicados") },
+    "/cursos": {
+      get: operation("Catálogo público: solo publicados", { params: query }),
+      post: operation("Crear curso en borrador (instructor)", { auth: true, schema: course, status: 201 }),
+    },
+    "/cursos/{id}": {
+      get: operation("Detalle público y temario, sin contenido ni respuestas", { params: [id] }),
+      put: operation("Editar curso propio", { auth: true, params: [id], schema: course }),
+      delete: operation("Eliminar curso propio sin inscritos", { auth: true, params: [id], status: 204 }),
+    },
+    "/instructor/cursos": { get: operation("Listar mis cursos, incluidos borradores", { auth: true, params: query }) },
+    "/instructor/cursos/{id}": { get: operation("Contenido de mi curso para edición", { auth: true, params: [id] }) },
+    "/cursos/{id}/estado": { patch: operation("Publicar (mínimo una lección) o archivar", {
+      auth: true, params: [id], schema: object({ estado: { type: "string", enum: ["publicado", "archivado"] } }),
+    }) },
+    "/cursos/{id}/lecciones": { post: operation("Crear lección de contenido en curso propio", {
+      auth: true, params: [id], schema: lesson, status: 201,
+    }) },
+    "/cursos/{id}/lecciones/orden": { patch: operation("Ordenar: enviar TODOS los IDs en el orden deseado", {
+      auth: true, params: [id], schema: object({ lecciones: { type: "array", uniqueItems: true, minItems: 1, items: { type: "integer" } } }),
+    }) },
+    "/lecciones/{id}": {
+      put: operation("Editar lección de contenido propia", { auth: true, params: [id], schema: lesson }),
+      delete: operation("Eliminar lección propia (no la última de un curso publicado)", { auth: true, params: [id], status: 204 }),
+    },
+  },
+};

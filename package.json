@@ -1,0 +1,19 @@
+{
+  "name": "miniaula",
+  "private": true,
+  "overrides": {
+    "uuid": "^11.1.1"
+  },
+  "scripts": {
+    "dev:api": "npm --prefix api run dev",
+    "dev:web": "npm --prefix web run dev",
+    "test:api": "npm --prefix api test",
+    "test:web": "npm --prefix web test",
+    "build:web": "npm --prefix web run build"
+  },
+  "dependencies": {
+    "pg": "^8.23.1",
+    "pg-hstore": "^2.3.4",
+    "sequelize": "^6.37.8"
+  }
+}

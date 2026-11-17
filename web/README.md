@@ -1,4 +1,24 @@
 # Frontend de MiniAula
 
-Esta carpeta está reservada para la SPA con React, Vite y JavaScript requerida
-por la consigna. Su implementación está pendiente.
+SPA con React, Vite, JavaScript y Bootstrap. Incluye autenticación, perfil,
+catálogo, detalle público y editor de cursos/lecciones del instructor.
+
+Consulta el [README principal](../README.md) para Docker, cuentas y alcance.
+
+## Desarrollo
+
+1. `npm ci`
+2. Copiar `.env.example` a `.env` si no existe.
+3. `npm run dev`
+
+La API debe estar levantada y `VITE_API_URL` debe apuntar a ella.
+
+## Comprobaciones
+
+- `npm test`: componentes, sesión, servicios y rutas.
+- `npm run build`: compilación de producción.
+- `npm run test:e2e`: prueba de navegador con API/BD de memoria aisladas; requiere
+  dependencias instaladas también en `../api`.
+
+El frontend no utiliza datos inventados como sustituto de la API. Las vistas del
+estudiante con progreso y cuestionarios se implementarán en la siguiente etapa.
