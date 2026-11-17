@@ -1,0 +1,24 @@
+import { Router } from "express";
+import * as controller from "../controllers/course.controller.js";
+import * as lesson from "../controllers/lesson.controller.js";
+import { authenticate, requireRole, ownCourse, ownLesson } from "../middlewares/auth.middleware.js";
+import { validate } from "../middlewares/validate.middleware.js";
+import { catalogQuery, courseBody, idParams, stateBody, lessonBody, orderBody, emptyQuery } from "../validators/schemas.js";
+
+const router = Router();
+const instructor = [authenticate, requireRole("instructor")];
+const params = { params: idParams, query: emptyQuery };
+router.get("/cursos", validate({ query: catalogQuery }), controller.list);
+router.get("/categorias", validate({ query: emptyQuery }), controller.categories);
+router.get("/cursos/:id", validate(params), controller.detail);
+router.get("/instructor/cursos", ...instructor, validate({ query: catalogQuery }), controller.mine);
+router.get("/instructor/cursos/:id", ...instructor, validate(params), ownCourse, controller.editDetail);
+router.post("/cursos", ...instructor, validate({ body: courseBody, query: emptyQuery }), controller.create);
+router.put("/cursos/:id", ...instructor, validate({ ...params, body: courseBody }), ownCourse, controller.update);
+router.delete("/cursos/:id", ...instructor, validate(params), ownCourse, controller.remove);
+router.patch("/cursos/:id/estado", ...instructor, validate({ ...params, body: stateBody }), ownCourse, controller.state);
+router.post("/cursos/:id/lecciones", ...instructor, validate({ ...params, body: lessonBody }), ownCourse, lesson.create);
+router.patch("/cursos/:id/lecciones/orden", ...instructor, validate({ ...params, body: orderBody }), ownCourse, lesson.reorder);
+router.put("/lecciones/:id", ...instructor, validate({ ...params, body: lessonBody }), ownLesson, lesson.update);
+router.delete("/lecciones/:id", ...instructor, validate(params), ownLesson, lesson.remove);
+export default router;
