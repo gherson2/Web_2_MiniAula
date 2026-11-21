@@ -5,6 +5,7 @@ import { useResource } from "../hooks/useResource";
 import { useAuth } from "../hooks/useAuth";
 import { CourseArt, levelLabels } from "../components/CourseCard";
 import { Loading, ErrorAlert, EmptyState } from "../components/Feedback";
+import { EnrollmentPanel } from "../components/EnrollmentPanel";
 
 export function CourseDetailPage() {
   const { id } = useParams();
@@ -32,7 +33,9 @@ export function CourseDetailPage() {
         <div className="detail-aside"><CourseArt course={course} />
           <div className="p-4"><h2 className="h5">Un nuevo tema para explorar</h2>
             <p className="text-secondary">Consulta el temario y conoce los temas de este curso.</p>
-            <div className="stage-notice">En esta primera etapa están disponibles el catálogo y la gestión de contenido. La inscripción, las lecciones para estudiantes y los cuestionarios llegarán en la siguiente etapa.</div>
+            <div className="stage-notice">Ya puedes inscribirte y guardar este curso en tu lista.
+              Las lecciones para estudiantes, el progreso y los cuestionarios llegarán en la siguiente etapa.</div>
+            {user?.rol === "estudiante" && <EnrollmentPanel key={`${user.id}:${course.id}`} courseId={course.id} />}
             {user?.id === course.instructorId && <Link className="btn btn-primary w-100 mt-3" to={`/instructor/cursos/${id}/editar`}>Editar mi curso →</Link>}
             {!user && <Link className="btn btn-outline-primary w-100 mt-3" to="/registro">Crear una cuenta</Link>}
           </div>

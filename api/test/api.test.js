@@ -243,3 +243,86 @@ test("login tiene límite de intentos con error normalizado", async () => {
   assert.equal(response.status, 429);
   assert.equal(response.body.error.code, "RATE_LIMIT");
 });
+
+test("inscripción: exige sesión de estudiante y valida params, body y query", async () => {
+  await api.post("/api/cursos/1/inscripcion").expect(401);
+  await api.post("/api/cursos/1/inscripcion").set(auth(accounts.teacher)).expect(403);
+  await api.get("/api/inscripciones/mias").expect(401);
+  await api.get("/api/inscripciones/mias").set(auth(accounts.teacher)).expect(403);
+  await api.post("/api/cursos/invalido/inscripcion").set(auth(accounts.student)).expect(422);
+  await api.post("/api/cursos/1/inscripcion").set(auth(accounts.student))
+    .send({ estudianteId: accounts.other.usuario.id }).expect(422);
+  for (const query of ["page=0", "limit=51", "cursoId=0", "estudianteId=1"]) {
+    await api.get(`/api/inscripciones/mias?${query}`).set(auth(accounts.student)).expect(422);
+  }
+});
+
+test("estudiante se inscribe una sola vez y el servidor determina su identidad", async () => {
+  const result = await api.post("/api/cursos/1/inscripcion").set(auth(accounts.student)).expect(201);
+  assert.deepEqual(Object.keys(result.body).sort(), ["completado", "cursoId", "fechaInscripcion", "id"]);
+  assert.equal(result.body.cursoId, 1);
+  const saved = await Inscripcion.findByPk(result.body.id);
+  assert.equal(saved.estudianteId, accounts.student.usuario.id);
+  const duplicate = await api.post("/api/cursos/1/inscripcion").set(auth(accounts.student)).send({}).expect(409);
+  assert.equal(duplicate.body.error.code, "ALREADY_ENROLLED");
+  assert.equal(await Inscripcion.count({ where: { cursoId: 1, estudianteId: accounts.student.usuario.id } }), 1);
+});
+
+test("solo se admiten inscripciones en cursos publicados existentes", async () => {
+  for (const estado of ["borrador", "archivado"]) {
+    const course = await Curso.create({ ...courseData, estado, instructorId: accounts.teacher.usuario.id });
+    await api.post(`/api/cursos/${course.id}/inscripcion`).set(auth(accounts.student)).expect(404);
+    assert.equal(await Inscripcion.count({ where: { cursoId: course.id } }), 0);
+  }
+  await api.post("/api/cursos/2147483647/inscripcion").set(auth(accounts.student)).expect(404);
+});
+
+test("mis inscripciones son privadas, paginadas y no revelan contenido ni respuestas", async () => {
+  const filtered = await api.get("/api/inscripciones/mias?cursoId=1").set(auth(accounts.student)).expect(200);
+  assert.equal(filtered.body.pagination.total, 1);
+  assert.equal(filtered.body.data[0].curso.titulo, "Node.js desde cero");
+  assert.equal(filtered.body.data[0].curso.instructor.nombre, "Ana Pérez");
+  const json = JSON.stringify(filtered.body);
+  for (const field of ['"contenido":', '"videoUrl":', '"passwordHash":', '"indiceCorrecto":', '"lecciones":']) {
+    assert.equal(json.includes(field), false, `No debe exponer ${field}`);
+  }
+  const another = await Usuario.findOne({ where: { email: "maria@miniaula.test" } });
+  const token = jwt.sign({}, process.env.JWT_SECRET, { subject: String(another.id), expiresIn: "1h" });
+  const otherList = await api.get("/api/inscripciones/mias?cursoId=1")
+    .set("Authorization", `Bearer ${token}`).expect(200);
+  assert.deepEqual(otherList.body.data, []);
+  const firstPage = await api.get("/api/inscripciones/mias?page=1&limit=1").set(auth(accounts.student)).expect(200);
+  const secondPage = await api.get("/api/inscripciones/mias?page=2&limit=1").set(auth(accounts.student)).expect(200);
+  assert.ok(firstPage.body.pagination.total >= 2);
+  assert.equal(firstPage.body.data.length, 1);
+  assert.equal(secondPage.body.data.length, 1);
+  assert.notEqual(firstPage.body.data[0].id, secondPage.body.data[0].id);
+});
+
+test("inscripción real impide borrar el curso o cambiar su estructura; se conserva al archivar", async () => {
+  const course = await Curso.create({ ...courseData, instructorId: accounts.teacher.usuario.id });
+  const lesson = await Leccion.create({ titulo: "Contenido inscrito", tipo: "contenido", contenido: "Texto",
+    orden: 1, cursoId: course.id });
+  await api.patch(`/api/cursos/${course.id}/estado`).set(auth(accounts.teacher)).send({ estado: "publicado" }).expect(200);
+  await api.post(`/api/cursos/${course.id}/inscripcion`).set(auth(accounts.student)).expect(201);
+  await api.delete(`/api/cursos/${course.id}`).set(auth(accounts.teacher)).expect(409);
+  await api.delete(`/api/lecciones/${lesson.id}`).set(auth(accounts.teacher)).expect(409);
+  await api.put(`/api/lecciones/${lesson.id}`).set(auth(accounts.teacher)).send({ titulo: "Cambio", contenido: "Cambio" }).expect(409);
+  await api.patch(`/api/cursos/${course.id}/lecciones/orden`).set(auth(accounts.teacher))
+    .send({ lecciones: [lesson.id] }).expect(409);
+  await api.patch(`/api/cursos/${course.id}/estado`).set(auth(accounts.teacher)).send({ estado: "archivado" }).expect(200);
+  const mine = await api.get(`/api/inscripciones/mias?cursoId=${course.id}`).set(auth(accounts.student)).expect(200);
+  assert.equal(mine.body.data[0].curso.estado, "archivado");
+  await api.post(`/api/cursos/${course.id}/inscripcion`).set(auth(accounts.student)).expect(404);
+});
+
+test("PostgreSQL real serializa inscripciones simultáneas y solo crea una", {
+  skip: process.env.API_TEST_POSTGRES !== "true" && "Requiere bloqueo de filas de PostgreSQL real.",
+}, async () => {
+  const course = await Curso.create({ ...courseData, estado: "publicado", instructorId: accounts.teacher.usuario.id });
+  const results = await Promise.all(Array.from({ length: 8 }, () =>
+    api.post(`/api/cursos/${course.id}/inscripcion`).set(auth(accounts.student))));
+  assert.equal(results.filter((result) => result.status === 201).length, 1);
+  assert.equal(results.filter((result) => result.status === 409).length, 7);
+  assert.equal(await Inscripcion.count({ where: { cursoId: course.id, estudianteId: accounts.student.usuario.id } }), 1);
+});
