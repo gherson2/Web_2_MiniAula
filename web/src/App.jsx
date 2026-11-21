@@ -7,6 +7,7 @@ import { CourseDetailPage } from "./pages/CourseDetailPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { CourseEditorPage, NewCoursePage } from "./pages/CourseEditorPage";
 import { MyCoursesPage } from "./pages/MyCoursesPage";
+import { LearningPage } from "./pages/LearningPage";
 
 export default function App() {
   return <Routes><Route element={<Layout />}>
@@ -25,6 +26,8 @@ export default function App() {
     </Route>
     <Route element={<ProtectedRoute role="estudiante" />}>
       <Route path="/mis-cursos" element={<MyCoursesPage />} />
+      <Route path="/aprender/:id" element={<LearningPage />} />
+      <Route path="/aprender/:id/lecciones/:lessonId" element={<LearningPage />} />
     </Route>
     <Route path="*" element={<div className="empty-state"><h1>Página no encontrada</h1><Link to="/cursos">Volver al catálogo</Link></div>} />
   </Route></Routes>;

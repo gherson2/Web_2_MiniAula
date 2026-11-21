@@ -34,6 +34,7 @@ export function EnrollmentPanel({ courseId }) {
         {success ? "Tu inscripción se guardó correctamente." : "Ya estás inscrito en este curso."}
       </div>
       <Link className="btn btn-primary w-100" to="/mis-cursos">Ver mis cursos →</Link>
+      <Link className="btn btn-outline-primary w-100 mt-2" to={`/aprender/${courseId}`}>Abrir aula →</Link>
     </> : <button className="btn btn-primary w-100" disabled={busy} onClick={enroll}>
       {busy ? "Guardando inscripción…" : "Inscribirme en este curso"}
     </button>}

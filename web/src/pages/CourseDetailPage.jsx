@@ -34,7 +34,8 @@ export function CourseDetailPage() {
           <div className="p-4"><h2 className="h5">Un nuevo tema para explorar</h2>
             <p className="text-secondary">Consulta el temario y conoce los temas de este curso.</p>
             <div className="stage-notice">Ya puedes inscribirte y guardar este curso en tu lista.
-              Las lecciones para estudiantes, el progreso y los cuestionarios llegarán en la siguiente etapa.</div>
+              Si estás inscrito, puedes leer las lecciones desbloqueadas en el aula.
+              Completar lecciones y rendir cuestionarios siguen pendientes.</div>
             {user?.rol === "estudiante" && <EnrollmentPanel key={`${user.id}:${course.id}`} courseId={course.id} />}
             {user?.id === course.instructorId && <Link className="btn btn-primary w-100 mt-3" to={`/instructor/cursos/${id}/editar`}>Editar mi curso →</Link>}
             {!user && <Link className="btn btn-outline-primary w-100 mt-3" to="/registro">Crear una cuenta</Link>}

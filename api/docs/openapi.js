@@ -28,8 +28,8 @@ function operation(summary, { auth = false, params = [], schema, status = 200 } 
 
 export const openapi = {
   openapi: "3.0.3",
-  info: { title: "MiniAula — avance con inscripciones", version: "0.4.1",
-    description: "Autenticación, perfil, catálogo, cursos, lecciones e inscripción del estudiante. Incluye lista básica de cursos inscritos, todavía sin progreso. Desbloqueo, completar lecciones, cuestionarios y estadísticas siguen pendientes. El logout elimina la sesión del cliente; el JWT expira en 2 horas por defecto." },
+  info: { title: "MiniAula — aula del estudiante", version: "0.5.0",
+    description: "Incluye inscripción y lectura de contenido desbloqueado para estudiantes inscritos, con bloqueo secuencial en servidor y consulta de progreso solo lectura. Todavía no se pueden completar lecciones ni rendir cuestionarios. Porcentaje en Mis cursos y estadísticas siguen pendientes. El logout elimina la sesión del cliente; el JWT expira en 2 horas por defecto." },
   servers: [{ url: "/api" }],
   components: {
     securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" } },
@@ -80,6 +80,9 @@ export const openapi = {
       auth: true, params: [id], schema: object({ lecciones: { type: "array", uniqueItems: true, minItems: 1, items: { type: "integer" } } }),
     }) },
     "/lecciones/{id}": {
+      get: operation("Leer lección (estudiante inscrito). 403 si bloqueada; nunca revela claves de preguntas.", {
+        auth: true, params: [id],
+      }),
       put: operation("Editar lección de contenido propia", { auth: true, params: [id], schema: lesson }),
       delete: operation("Eliminar lección propia (no la última de un curso publicado)", { auth: true, params: [id], status: 204 }),
     },
@@ -94,6 +97,11 @@ export const openapi = {
           ...query.filter((item) => ["page", "limit"].includes(item.name)),
           { in: "query", name: "cursoId", schema: { type: "integer", minimum: 1 } },
         ],
+      }),
+    },
+    "/cursos/{id}/progreso": {
+      get: operation("Mi temario con estados de acceso y resumen de progreso, sin contenido. Solo lectura.", {
+        auth: true, params: [id],
       }),
     },
   },

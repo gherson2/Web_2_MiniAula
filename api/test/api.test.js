@@ -15,7 +15,7 @@ process.env.DB_TEST_MEMORY = process.env.API_TEST_POSTGRES === "true" ? "false" 
 process.env.JWT_SECRET = randomBytes(48).toString("hex");
 process.env.SEED_PASSWORD = "DemoAula2026!";
 const { app } = await import("../app.js");
-const { sequelize, Usuario, Curso, Leccion, Pregunta, Inscripcion } = await import("../models/index.js");
+const { sequelize, Usuario, Curso, Leccion, Pregunta, Inscripcion, Progreso } = await import("../models/index.js");
 const { migrate } = await import("../database/migrate.js");
 const { seed } = await import("../database/seed.js");
 const api = request(app);
@@ -325,4 +325,112 @@ test("PostgreSQL real serializa inscripciones simultáneas y solo crea una", {
   assert.equal(results.filter((result) => result.status === 201).length, 1);
   assert.equal(results.filter((result) => result.status === 409).length, 7);
   assert.equal(await Inscripcion.count({ where: { cursoId: course.id, estudianteId: accounts.student.usuario.id } }), 1);
+});
+
+const learningLessons = () => Leccion.findAll({ where: { cursoId: 1 }, order: [["orden", "ASC"]] });
+const learningEnrollment = () => Inscripcion.findOne({
+  where: { cursoId: 1, estudianteId: accounts.student.usuario.id },
+});
+
+test("aula: sesión, rol, inscripción y validación se comprueban en servidor", async () => {
+  const [first] = await learningLessons();
+  for (const path of ["/api/cursos/1/progreso", `/api/lecciones/${first.id}`]) {
+    await api.get(path).expect(401);
+    await api.get(path).set(auth(accounts.teacher)).expect(403);
+    await api.get(`${path}?estudianteId=1`).set(auth(accounts.student)).expect(422);
+  }
+  const denied = await api.get("/api/cursos/2/progreso").set(auth(accounts.student)).expect(403);
+  assert.equal(denied.body.error.code, "NOT_ENROLLED");
+  for (const path of ["/api/cursos/error/progreso", "/api/lecciones/error"]) {
+    await api.get(path).set(auth(accounts.student)).expect(422);
+  }
+  await api.get("/api/cursos/2147483647/progreso").set(auth(accounts.student)).expect(404);
+  await api.get("/api/lecciones/2147483647").set(auth(accounts.student)).expect(404);
+});
+
+test("aula: el temario privado no expone contenidos y solo la primera lección está disponible", async () => {
+  const response = await api.get("/api/cursos/1/progreso").set(auth(accounts.student)).expect(200);
+  assert.equal(response.body.lecciones.length, 5);
+  assert.equal(response.body.lecciones[0].bloqueada, false);
+  assert.ok(response.body.lecciones.slice(1).every((lesson) => lesson.bloqueada));
+  assert.equal(response.body.completadas, 0);
+  assert.equal(response.body.porcentaje, 0);
+  for (const field of ['"contenido":', '"videoUrl":', '"indiceCorrecto":', '"passwordHash":', '"preguntas":']) {
+    assert.equal(JSON.stringify(response.body).includes(field), false);
+  }
+});
+
+test("aula: el estudiante inscrito lee texto y video de la lección desbloqueada", async () => {
+  const [first] = await learningLessons();
+  await first.update({ videoUrl: "https://example.com/video-estudiante" });
+  const response = await api.get(`/api/lecciones/${first.id}`).set(auth(accounts.student)).expect(200);
+  assert.equal(response.body.titulo, first.titulo);
+  assert.equal(response.body.contenido, first.contenido);
+  assert.equal(response.body.videoUrl, "https://example.com/video-estudiante");
+  assert.equal(response.body.progreso.bloqueada, false);
+  assert.equal(response.body.indiceCorrecto, undefined);
+  assert.equal(response.body.preguntas, undefined);
+});
+
+test("aula: saltar por URL o API a cualquier lección bloqueada devuelve 403 sin contenido", async () => {
+  const lessons = await learningLessons();
+  for (const lesson of lessons.slice(1)) {
+    const response = await api.get(`/api/lecciones/${lesson.id}`).set(auth(accounts.student)).expect(403);
+    assert.equal(response.body.error.code, "LESSON_LOCKED");
+    assert.equal(response.body.contenido, undefined);
+    assert.equal(response.body.videoUrl, undefined);
+  }
+});
+
+test("aula: interpreta progreso propio guardado sin compartirlo con otro estudiante", async () => {
+  const [first, second, third] = await learningLessons();
+  const enrollment = await learningEnrollment();
+  // Solo fixture de prueba: el endpoint para completar sigue pendiente.
+  await Progreso.create({ inscripcionId: enrollment.id, leccionId: first.id, completada: true });
+  await api.get(`/api/lecciones/${second.id}`).set(auth(accounts.student)).expect(200);
+  await api.get(`/api/lecciones/${third.id}`).set(auth(accounts.student)).expect(403);
+  const mine = await api.get("/api/cursos/1/progreso").set(auth(accounts.student)).expect(200);
+  assert.equal(mine.body.porcentaje, 20);
+  const another = await Usuario.findOne({ where: { email: "maria@miniaula.test" } });
+  const token = jwt.sign({}, process.env.JWT_SECRET, { subject: String(another.id), expiresIn: "1h" });
+  const headers = { Authorization: `Bearer ${token}` };
+  await api.get(`/api/lecciones/${first.id}`).set(headers).expect(403);
+  await api.post("/api/cursos/1/inscripcion").set(headers).expect(201);
+  const otherProgress = await api.get("/api/cursos/1/progreso").set(headers).expect(200);
+  assert.equal(otherProgress.body.porcentaje, 0);
+  await api.get(`/api/lecciones/${second.id}`).set(headers).expect(403);
+  await api.post(`/api/lecciones/${first.id}/completar`).set(auth(accounts.student)).expect(404);
+});
+
+test("aula: un cuestionario anterior requiere aprobación; sus preguntas y claves siguen ocultas", async () => {
+  const lessons = await learningLessons();
+  const enrollment = await learningEnrollment();
+  for (const lesson of lessons.slice(1, 3)) {
+    await Progreso.create({ inscripcionId: enrollment.id, leccionId: lesson.id, completada: true });
+  }
+  const quiz = lessons[3];
+  const saved = await Progreso.create({
+    inscripcionId: enrollment.id, leccionId: quiz.id, completada: true, mejorNota: quiz.notaMinima - 1,
+  });
+  const quizResponse = await api.get(`/api/lecciones/${quiz.id}`).set(auth(accounts.student)).expect(200);
+  for (const field of ["preguntas", "indiceCorrecto", "contenido", "videoUrl"]) {
+    assert.equal(quizResponse.body[field], undefined);
+  }
+  await api.get(`/api/lecciones/${lessons[4].id}`).set(auth(accounts.student)).expect(403);
+  await saved.update({ mejorNota: quiz.notaMinima });
+  await api.get(`/api/lecciones/${lessons[4].id}`).set(auth(accounts.student)).expect(200);
+});
+
+test("aula: conserva acceso a inscritos al archivar, pero no entrega contenido en borrador", async () => {
+  const course = await Curso.findByPk(1);
+  const [first] = await learningLessons();
+  try {
+    await course.update({ estado: "archivado" });
+    await api.get("/api/cursos/1").expect(404);
+    await api.get("/api/cursos/1/progreso").set(auth(accounts.student)).expect(200);
+    await api.get(`/api/lecciones/${first.id}`).set(auth(accounts.student)).expect(200);
+    await course.update({ estado: "borrador" });
+    await api.get("/api/cursos/1/progreso").set(auth(accounts.student)).expect(404);
+    await api.get(`/api/lecciones/${first.id}`).set(auth(accounts.student)).expect(404);
+  } finally { await course.update({ estado: "publicado" }); }
 });

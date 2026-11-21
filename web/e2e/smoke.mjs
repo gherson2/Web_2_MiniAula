@@ -74,6 +74,11 @@ try {
   await page.getByRole("button", { name: "Guardar lección", exact: true }).click();
   await page.getByText("Lección guardada.", { exact: true }).waitFor();
   await checkWidth(page);
+  await page.getByRole("button", { name: "+ Agregar", exact: true }).click();
+  await page.getByLabel("Título de la lección").fill("Segunda lección de prueba");
+  await page.getByLabel("Contenido de texto").fill("Contenido de lección bloqueada.");
+  await page.getByRole("button", { name: "Guardar lección", exact: true }).click();
+  await page.getByText("Lección guardada.", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Publicar curso", exact: true }).click();
   await page.getByText("Publicado", { exact: true }).waitFor();
   await page.screenshot({ path: `${results}/editor-movil.png`, fullPage: true });
@@ -105,6 +110,25 @@ try {
   await page.screenshot({ path: `${results}/mis-cursos-inscripciones-movil.png`, fullPage: true });
   await page.reload();
   await page.getByRole("heading", { name: "Curso completo de prueba E2E", exact: true }).waitFor();
+  await page.getByRole("link", { name: /Abrir aula/ }).click();
+  await page.getByRole("heading", { name: "Introducción de prueba", exact: true }).waitFor();
+  await page.getByText("Este contenido es privado y no debe salir en el detalle público.", { exact: true }).waitFor();
+  assert.ok(await page.getByRole("button", { name: "Segunda lección de prueba: bloqueada" }).isDisabled());
+  assert.equal(await page.getByText("Contenido de lección bloqueada.", { exact: true }).count(), 0);
+  await checkWidth(page);
+  await page.screenshot({ path: `${results}/aula-estudiante-movil.png`, fullPage: true });
+  const session = await page.evaluate(() => JSON.parse(localStorage.getItem("miniaula.session")));
+  const headers = { Authorization: `Bearer ${session.token}` };
+  const outlineResponse = await page.request.get(`${process.env.VITE_API_URL}/cursos/${courseId}/progreso`, { headers });
+  assert.equal(outlineResponse.status(), 200);
+  const outline = await outlineResponse.json();
+  const blockedId = outline.lecciones.find((lesson) => lesson.bloqueada).id;
+  const denied = await page.request.get(`${process.env.VITE_API_URL}/lecciones/${blockedId}`, { headers });
+  assert.equal(denied.status(), 403);
+  assert.equal((await denied.json()).error.code, "LESSON_LOCKED");
+  await page.goto(`${base}/aprender/${courseId}/lecciones/${blockedId}`);
+  await page.getByRole("alert").filter({ hasText: "Completa las lecciones anteriores" }).waitFor();
+  await page.goto(`${base}/mis-cursos`);
   await page.getByRole("link", { name: /Ver temario/ }).click();
   await page.getByText("Ya estás inscrito en este curso.", { exact: true }).waitFor();
   assert.equal(await page.getByRole("button", { name: "Inscribirme en este curso" }).count(), 0);
@@ -112,7 +136,7 @@ try {
   await page.getByRole("heading", { name: "Esta sección es para instructores" }).waitFor();
   await checkWidth(page);
   assert.deepEqual(errors, [], "No debe haber excepciones de JavaScript en el navegador.");
-  console.log("E2E correcto: catálogo, login, registro, curso, lección, publicación, inscripción, mis cursos, privacidad, persistencia y permisos; móvil 375px sin desbordamiento.");
+  console.log("E2E correcto: catálogo, usuarios, cursos, inscripción, mis cursos, aula, contenido privado, bloqueo 403 por API y URL directa, sesión y permisos; móvil 375px sin desbordamiento.");
   console.log("Capturas guardadas en web/test-results/.");
 } finally {
   await browser?.close();

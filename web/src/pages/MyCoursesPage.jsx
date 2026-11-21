@@ -14,8 +14,8 @@ export function MyCoursesPage() {
   return <section>
     <span className="eyebrow">TU ESPACIO PARA APRENDER</span><h1>Mis cursos</h1>
     <p className="text-secondary">Aquí se guardan las inscripciones de tu cuenta.</p>
-    <div className="stage-notice mb-4">En este avance puedes inscribirte y consultar tu lista.
-      El contenido para estudiantes, el porcentaje de progreso y los cuestionarios siguen pendientes.</div>
+    <div className="stage-notice mb-4">Abre el aula para leer las lecciones desbloqueadas de tus cursos.
+      Completar lecciones, ver el porcentaje en esta lista y rendir cuestionarios siguen pendientes.</div>
     {resource.loading ? <Loading /> : resource.error ? <ErrorAlert message={resource.error} retry={resource.reload} /> :
       resource.data.data.length === 0 ? <EmptyState title="Todavía no te inscribiste en un curso">
         <Link to="/cursos">Explorar el catálogo</Link>
@@ -38,6 +38,7 @@ export function MyCoursesPage() {
                   <span className="level-label">{levelLabels[curso.nivel]}</span>
                   <Link className="course-link" to={`/cursos/${curso.id}`}>Ver temario ↗</Link>
                 </div>}
+                <Link className="btn btn-primary w-100 mt-3" to={`/aprender/${curso.id}`}>Abrir aula →</Link>
               </div>
             </article>
           </div>)}</div>
