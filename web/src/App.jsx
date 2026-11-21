@@ -6,6 +6,7 @@ import { CatalogPage } from "./pages/CatalogPage";
 import { CourseDetailPage } from "./pages/CourseDetailPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { CourseEditorPage, NewCoursePage } from "./pages/CourseEditorPage";
+import { MyCoursesPage } from "./pages/MyCoursesPage";
 
 export default function App() {
   return <Routes><Route element={<Layout />}>
@@ -21,6 +22,9 @@ export default function App() {
       <Route path="/instructor/cursos" element={<CatalogPage key="instructor" instructor />} />
       <Route path="/instructor/cursos/nuevo" element={<NewCoursePage />} />
       <Route path="/instructor/cursos/:id/editar" element={<CourseEditorPage />} />
+    </Route>
+    <Route element={<ProtectedRoute role="estudiante" />}>
+      <Route path="/mis-cursos" element={<MyCoursesPage />} />
     </Route>
     <Route path="*" element={<div className="empty-state"><h1>Página no encontrada</h1><Link to="/cursos">Volver al catálogo</Link></div>} />
   </Route></Routes>;

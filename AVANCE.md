@@ -1,8 +1,16 @@
-# Estado de MiniAula — primera etapa (~40 % orientativo)
+# Estado de MiniAula — avance con inscripciones (~45 % orientativo)
 
 No es una nota calculada con la rúbrica: el avance secuencial, los cuestionarios y
 el panel concentran una parte importante del trabajo restante.
 “Implementado” no reemplaza la comprobación del docente ni la prueba de Docker.
+
+## Incremento de esta entrega
+
+Se añade aproximadamente un bloque de 5 puntos porcentuales al avance anterior
+del 40 %: inscripción a cursos publicados, prevención de duplicados y lista básica
+de cursos inscritos por estudiante, con persistencia al recargar.
+Se usó `Downloads/26` como referencia, sin copiar todo el proyecto ni modificarlo.
+No se incluye todavía acceso al contenido del estudiante, progreso o cuestionarios.
 
 ## Funcionalidades
 
@@ -18,9 +26,9 @@ el panel concentran una parte importante del trabajo restante.
 | RF-08 | Implementado | CRUD de lecciones de contenido, texto y enlace a video |
 | RF-09 | Implementado | Ordenar con flechas y validación completa en servidor |
 | RF-10 | Pendiente | Contenido del estudiante y lecciones bloqueadas |
-| RF-11 | Pendiente | Inscripción desde API y frontend |
+| RF-11 | Implementado | Inscribirse desde el detalle, solo estudiante y curso publicado |
 | RF-12 | Pendiente | Completar lecciones |
-| RF-13 | Pendiente | Mis cursos del estudiante y porcentaje de avance |
+| RF-13 | Parcial | Lista privada y paginada de cursos inscritos; falta porcentaje de avance |
 | RF-14 | Pendiente | Editor de preguntas y nota mínima |
 | RF-15 | Pendiente | Rendir, calificar, aprobar y limitar intentos |
 | RF-16 | Pendiente | Resumen de inscritos, promedios y punto de detención |
@@ -32,11 +40,11 @@ el panel concentran una parte importante del trabajo restante.
 | RN-01 | Pendiente: bloqueo secuencial validado en servidor |
 | RN-02 | Parcial: endpoints públicos no exponen respuestas; falta calificación |
 | RN-03 | Pendiente: límite de 3 intentos y mejor nota (campos y CHECK preparados) |
-| RN-04 | Parcial: restricción única de inscripción preparada; falta flujo de inscripción |
+| RN-04 | Implementado: inscripción única, error 409 y bloqueo de concurrencia en PostgreSQL |
 | RN-05 | Implementado: catálogo publicado y publicación con mínimo una lección |
-| RN-06 | Implementado y probado con inscripción de fixture: curso con inscritos no se elimina |
+| RN-06 | Implementado y probado con inscripción desde API: curso con inscritos no se elimina |
 | RN-07 | Implementado en cursos y lecciones; preguntas pendientes |
-| RN-08 | Pendiente: aún no existen endpoints de progreso/notas |
+| RN-08 | Inscripciones privadas implementadas; progreso/notas todavía pendientes |
 
 ## Base técnica
 
@@ -53,7 +61,7 @@ el panel concentran una parte importante del trabajo restante.
 
 ## Siguiente bloque recomendado
 
-1. Inscripción y acceso por estudiante inscrito.
+1. Acceso al contenido por estudiante inscrito.
 2. Progreso, completar contenido y desbloqueo secuencial en servidor.
 3. Editor de preguntas y nota mínima, sin filtrar respuestas al estudiante.
 4. Calificación, máximo 3 intentos y guardar la mejor nota.
@@ -62,10 +70,13 @@ el panel concentran una parte importante del trabajo restante.
 
 ## Verificación de esta etapa
 
-- 17 pruebas de API aprobadas con base de datos aislada en memoria.
-- Las mismas 17 pruebas aprobadas contra PostgreSQL 16 en Docker, utilizando
+- 22 pruebas de API aprobadas con base de datos aislada en memoria; una prueba
+  de concurrencia se omite porque necesita PostgreSQL real.
+- Las 23 pruebas de API aprobadas contra PostgreSQL 16 en Docker, utilizando
   una base temporal independiente que se eliminó al terminar.
-- 10 pruebas de frontend aprobadas.
+- Concurrencia real: 8 inscripciones simultáneas producen una respuesta 201,
+  siete respuestas 409 y una única fila en la BD.
+- 19 pruebas de frontend aprobadas.
 - Recorrido real en Edge aprobado: catálogo, registro/login, borrador, validación
   de publicación, lección, publicación, privacidad, sesión persistente y bloqueo por rol.
 - Pantallas comprobadas a 375px sin desbordamiento horizontal.
@@ -79,5 +90,9 @@ el panel concentran una parte importante del trabajo restante.
   de sesión al recargar, curso y lecciones, orden, publicación, privacidad y archivo.
   El curso temporal se eliminó sin modificar cursos existentes.
 - Migración y seed ejecutados nuevamente dentro del contenedor sin duplicar datos.
-- En esta máquina, `.env` de la raíz configura `DB_PORT=5435` para evitar
-  conflictos con servicios locales; ese archivo no se incluye en Git.
+- Inscripción y lista de cursos comprobadas en navegador con Nginx y PostgreSQL:
+  persistencia al recargar, botón de inscripción ya realizada, rechazo de duplicados,
+  permisos y diseño de 375px. Solo se eliminó la inscripción temporal de la prueba.
+- En esta máquina se usa un despliegue independiente `miniaula-avance45`:
+  frontend en 8081, API en 4001 y BD en 5435. La versión completa de `Downloads/26`
+  sigue en 8080 sin cambios. Los ajustes están en `.env`, excluido de Git.

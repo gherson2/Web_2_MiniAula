@@ -28,8 +28,8 @@ function operation(summary, { auth = false, params = [], schema, status = 200 } 
 
 export const openapi = {
   openapi: "3.0.3",
-  info: { title: "MiniAula — primera etapa", version: "0.4.0",
-    description: "Autenticación, perfil, catálogo y gestión de cursos y lecciones. Inscripciones, progreso, evaluación de cuestionarios y estadísticas aún NO están implementados. El logout elimina la sesión del cliente; el JWT expira en 2 horas." },
+  info: { title: "MiniAula — avance con inscripciones", version: "0.4.1",
+    description: "Autenticación, perfil, catálogo, cursos, lecciones e inscripción del estudiante. Incluye lista básica de cursos inscritos, todavía sin progreso. Desbloqueo, completar lecciones, cuestionarios y estadísticas siguen pendientes. El logout elimina la sesión del cliente; el JWT expira en 2 horas por defecto." },
   servers: [{ url: "/api" }],
   components: {
     securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" } },
@@ -82,6 +82,19 @@ export const openapi = {
     "/lecciones/{id}": {
       put: operation("Editar lección de contenido propia", { auth: true, params: [id], schema: lesson }),
       delete: operation("Eliminar lección propia (no la última de un curso publicado)", { auth: true, params: [id], status: 204 }),
+    },
+    "/cursos/{id}/inscripcion": {
+      post: operation("Inscribirme en un curso publicado (estudiante). Sin cuerpo; duplicados: 409.", {
+        auth: true, params: [id], status: 201,
+      }),
+    },
+    "/inscripciones/mias": {
+      get: operation("Mis inscripciones: solo las del estudiante autenticado, sin contenido ni progreso", {
+        auth: true, params: [
+          ...query.filter((item) => ["page", "limit"].includes(item.name)),
+          { in: "query", name: "cursoId", schema: { type: "integer", minimum: 1 } },
+        ],
+      }),
     },
   },
 };

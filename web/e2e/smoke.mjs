@@ -42,6 +42,7 @@ try {
   });
   const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
   page.setDefaultTimeout(15000);
+  page.setDefaultNavigationTimeout(45000);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await mkdir(results, { recursive: true });
@@ -93,11 +94,25 @@ try {
   await page.getByRole("button", { name: /Crear mi cuenta/ }).click();
   await page.waitForURL("**/cursos");
   await page.getByRole("heading", { name: "Curso completo de prueba E2E" }).waitFor();
+  const courseId = editorUrl.match(/\/cursos\/(\d+)\/editar$/)[1];
+  await page.goto(`${base}/cursos/${courseId}`);
+  await page.getByRole("button", { name: "Inscribirme en este curso" }).click();
+  await page.getByText("Tu inscripción se guardó correctamente.", { exact: true }).waitFor();
+  await page.getByRole("link", { name: /Ver mis cursos/ }).click();
+  await page.waitForURL("**/mis-cursos");
+  await page.getByRole("heading", { name: "Curso completo de prueba E2E", exact: true }).waitFor();
+  await checkWidth(page);
+  await page.screenshot({ path: `${results}/mis-cursos-inscripciones-movil.png`, fullPage: true });
+  await page.reload();
+  await page.getByRole("heading", { name: "Curso completo de prueba E2E", exact: true }).waitFor();
+  await page.getByRole("link", { name: /Ver temario/ }).click();
+  await page.getByText("Ya estás inscrito en este curso.", { exact: true }).waitFor();
+  assert.equal(await page.getByRole("button", { name: "Inscribirme en este curso" }).count(), 0);
   await page.goto(`${base}/instructor/cursos`);
   await page.getByRole("heading", { name: "Esta sección es para instructores" }).waitFor();
   await checkWidth(page);
   assert.deepEqual(errors, [], "No debe haber excepciones de JavaScript en el navegador.");
-  console.log("E2E correcto: catálogo, login, registro, curso, lección, publicación, privacidad, persistencia y permisos; móvil 375px sin desbordamiento.");
+  console.log("E2E correcto: catálogo, login, registro, curso, lección, publicación, inscripción, mis cursos, privacidad, persistencia y permisos; móvil 375px sin desbordamiento.");
   console.log("Capturas guardadas en web/test-results/.");
 } finally {
   await browser?.close();

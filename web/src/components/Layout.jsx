@@ -15,6 +15,7 @@ export function Layout() {
         <div className="nav-links">
           <NavLink to="/cursos">Explorar cursos</NavLink>
           {user?.rol === "instructor" && <NavLink to="/instructor/cursos">Mis cursos</NavLink>}
+          {user?.rol === "estudiante" && <NavLink to="/mis-cursos">Mis cursos</NavLink>}
         </div>
         <div className="nav-account">
           {user ? <>
@@ -29,6 +30,6 @@ export function Layout() {
     </header>
     <main className="container page-main"><Outlet /></main>
     <footer className="site-footer container"><span>MiniAula · Pequeños pasos, grandes aprendizajes.</span>
-      <span className="stage-badge">Primera etapa · v0.4</span></footer>
+      <span className="stage-badge">Avance · Inscripciones</span></footer>
   </>;
 }

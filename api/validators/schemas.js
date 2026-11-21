@@ -26,6 +26,11 @@ export const catalogQuery = z.object({
   page: positiveId.default(1),
   limit: z.coerce.number().int().min(1).max(50).default(6),
 }).strict();
+export const enrollmentQuery = z.object({
+  page: positiveId.default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(6),
+  cursoId: positiveId.optional(),
+}).strict();
 export const stateBody = z.object({ estado: z.enum(["publicado", "archivado"]) }).strict();
 export const lessonBody = z.object({
   titulo: text(150),

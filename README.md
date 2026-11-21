@@ -1,7 +1,7 @@
 # MiniAula — Ingeniería Web 2
 
 Plataforma de cursos cortos con roles de instructor y estudiante.
-**Primera etapa, orientativamente ~40 % del proyecto**, no entrega final.
+**Avance con inscripciones, orientativamente ~45 % del proyecto**, no entrega final.
 El porcentaje es una planificación, no una nota ni un conteo uniforme de requisitos.
 Ver [AVANCE.md](AVANCE.md) para el alcance y lo pendiente.
 
@@ -12,10 +12,23 @@ Ver [AVANCE.md](AVANCE.md) para el alcance y lo pendiente.
 - Ver el detalle y el temario público, sin exponer contenido privado.
 - Como instructor: crear/editar cursos, publicar/archivar/eliminar los propios.
 - Crear/editar/eliminar lecciones de texto y video, y cambiar su orden con flechas.
+- Como estudiante: inscribirte en cursos publicados y consultar tus cursos inscritos.
+- La API impide inscripciones duplicadas (409), incluso ante solicitudes simultáneas.
 
-**Todavía no puedes inscribirte, completar lecciones, rendir cuestionarios ni consultar
-estadísticas de avance.** Los cuestionarios del seed solo preparan los datos de la
+**Todavía no puedes acceder al contenido como estudiante, completar lecciones, rendir
+cuestionarios ni consultar porcentajes/estadísticas de avance.** La lista básica de
+“Mis cursos” no significa que RF-13 esté terminado. Los cuestionarios del seed preparan los datos de la
 siguiente etapa; su existencia no significa que el módulo esté terminado.
+
+### Este incremento (~5 puntos porcentuales)
+
+Se añade únicamente inscripción y lista privada de cursos, tomando como referencia
+la versión completa de `Downloads/26`. Esa versión no se modificó.
+Para mantenerlas separadas, **en esta computadora el avance abre en
+<http://localhost:8081>**, la API en <http://localhost:4001/api> y Swagger en
+<http://localhost:4001/api/docs>. El proyecto completo de `26` permanece en el 8080.
+Las cuentas de prueba son las indicadas más abajo; para inscribirte usa un estudiante
+como `gerson@miniaula.test`.
 
 ## Levantar con Docker
 
@@ -25,6 +38,8 @@ Abre una terminal en la carpeta que contiene este README y `docker-compose.yml`:
 ```sh
 docker compose up --build
 ```
+
+Direcciones por defecto, si no se personalizan los puertos del `.env`:
 
 - Aplicación: <http://localhost:8080>
 - API: <http://localhost:4000/api>
@@ -164,6 +179,10 @@ docker-compose.yml
 - Si hay inscritos, el curso no se elimina y no se cambia su estructura: se puede
   archivar o editar sus datos. Es una decisión conservadora para no invalidar progreso.
 - Las escrituras estructurales usan transacciones y bloqueo del curso en PostgreSQL.
+- La inscripción usa ese mismo bloqueo y la restricción única estudiante/curso.
+  Solo se acepta un estudiante autenticado y el ID sale del JWT, nunca del body/query.
+- “Mis cursos” conserva las inscripciones de cursos archivados y no muestra un
+  enlace público roto. No devuelve contenidos, respuestas correctas ni datos de otros estudiantes.
 
 ## Pruebas
 
@@ -178,8 +197,9 @@ npm --prefix web run build
 La compilación necesita `VITE_API_URL` en `web/.env` o en el entorno.
 
 Las pruebas de API usan **pg-mem**, aislado de tu PostgreSQL: verifican migración,
-seed, autenticación, filtros, permisos, privacidad y gestión de contenido.
-No prueban el bloqueo/concurrencia ni las garantías de rollback de PostgreSQL real.
+seed, autenticación, filtros, permisos, privacidad, contenido e inscripciones.
+En memoria se aprueban 22 pruebas y se omite una de concurrencia.
+Ese adaptador no prueba el bloqueo ni las garantías de rollback de PostgreSQL real.
 El adaptador puede imprimir una advertencia de fechas de Moment.
 
 Para probar con un navegador real:
@@ -196,7 +216,10 @@ No utiliza ni modifica la base de datos local.
 
 Con los contenedores encendidos puedes comprobar el despliegue real:
 
-```sh
+En esta computadora (PowerShell), para probar el avance en vez de la copia de `26`:
+
+```powershell
+$env:DOCKER_TEST_URL = "http://localhost:8081"
 npm --prefix web run test:docker
 ```
 
@@ -214,13 +237,17 @@ autenticación, perfil, cursos/lecciones, orden, publicación, privacidad y arch
 El curso temporal de prueba se eliminó sin cambiar los cursos existentes.
 La migración y el seed también se ejecutaron nuevamente dentro de la API sin duplicar datos.
 
-En esta máquina, el `.env` de la raíz usa `DB_PORT=5435` porque otros servicios
-ya ocupan el 5432. La aplicación sigue en el 8080 y la API en el 4000.
-No se detuvieron ni modificaron las otras bases de datos locales.
+En esta máquina, `.env` usa `COMPOSE_PROJECT_NAME=miniaula-avance45`,
+`WEB_PORT=8081`, `API_PORT=4001` y `DB_PORT=5435`. Cada despliegue tiene su propio
+volumen de datos: no se modificó la versión completa que ocupa el 8080,
+ni se detuvieron o modificaron las otras bases de datos locales.
 Antes de la defensa, repetir el arranque y la demostración en la máquina del docente.
 
-Las 17 pruebas de API también se ejecutaron satisfactoriamente contra PostgreSQL 16
-en Docker, en una base temporal eliminada al terminar. Para repetirlas sobre una
+Las 23 pruebas de API se ejecutaron satisfactoriamente contra PostgreSQL 16
+en Docker, en una base temporal eliminada al terminar. Incluyen 8 inscripciones
+simultáneas con una sola fila creada. También pasaron 19 pruebas de frontend y el
+recorrido en navegador con inscripción, lista privada y persistencia al recargar.
+Para repetir las pruebas de API sobre una
 base **nueva y exclusiva para pruebas**, configura `API_TEST_POSTGRES=true`, la
 conexión `DB_*` y un `DB_NAME` terminado en `_test`, y ejecuta `npm --prefix api test`.
 No uses una base con datos que quieras conservar.
@@ -243,6 +270,9 @@ Revisa `npm audit` periódicamente; no expongas el servidor de desarrollo a Inte
 5. Publicar el curso y abrir su detalle público: se ve el temario, no el contenido.
 6. Entrar como Luis y comprobar que no puede editar el curso de Ana.
 7. Archivar el curso y comprobar que desaparece del catálogo.
+8. Entrar como Gerson, elegir un curso publicado e inscribirse desde el detalle.
+9. Abrir “Mis cursos”, recargar y comprobar que la inscripción persiste. Volver al
+   detalle: no debe ofrecer otra inscripción. El progreso sigue pendiente.
 
 ## Trabajo en pareja y entrega final
 
@@ -251,8 +281,8 @@ con revisión del compañero. Este avance no crea commits, PRs ni contribuciones
 
 Pendiente para la entrega:
 
-- RF-10 a RF-16: lecciones del estudiante, inscripción, progreso secuencial,
-  editor de preguntas, intentos y calificación en servidor, mis cursos y panel.
+- RF-10, RF-12 a RF-16: lecciones del estudiante, progreso secuencial,
+  editor de preguntas, intentos y calificación en servidor, porcentaje en mis cursos y panel.
 - Completar la documentación con esos endpoints y las pruebas de RN-01 a RN-08.
 - Verificar el arranque en Docker desde cero y preparar la defensa individual.
 - Video de 5 a 8 minutos con ambos integrantes. **Enlace: pendiente.**
