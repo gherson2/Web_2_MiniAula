@@ -4,8 +4,8 @@ SPA con React, Vite, JavaScript y Bootstrap. Incluye autenticación, perfil,
 catálogo, detalle público y editor de cursos/lecciones del instructor.
 Incluye inscripción, lista privada y aula del estudiante con lectura de contenido
 desbloqueado y temario bloqueado. Permite completar contenido, guardar el progreso,
-ver la barra del aula y continuar a la siguiente lección. Rendir y el porcentaje
-en la lista de Mis cursos siguen pendientes.
+ver la barra del aula y continuar a la siguiente lección. Mis cursos muestra el
+progreso real por tarjeta y permite empezar, continuar o repasar. Rendir sigue pendiente.
 
 Consulta el [README principal](../README.md) para Docker, cuentas y alcance.
 

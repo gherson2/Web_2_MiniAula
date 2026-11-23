@@ -13,6 +13,11 @@ Los cuestionarios no se pueden completar con ese endpoint: todavía falta rendir
 y calificarlos en servidor. Un cuestionario anterior sin aprobar mantiene el bloqueo.
 Los cambios se hicieron en el proyecto original, no en `Downloads/26`.
 
+“Mis cursos” muestra ahora completadas, total, barra, estado y acciones para empezar,
+continuar o repasar. El resumen es privado y usa la misma regla de cálculo del aula.
+Se consultan lecciones y progresos por página, sin agregar consultas por cada curso,
+y no se devuelven contenidos, claves ni notas.
+
 ## Funcionalidades
 
 | Código | Estado | Evidencia |
@@ -29,7 +34,7 @@ Los cambios se hicieron en el proyecto original, no en `Downloads/26`.
 | RF-10 | Implementado | Aula, texto/video de contenido desbloqueado y bloqueo validado en servidor |
 | RF-11 | Implementado | Inscribirse desde el detalle, solo estudiante y curso publicado |
 | RF-12 | Implementado | Completar contenido desbloqueado y persistir progreso propio |
-| RF-13 | Parcial | Lista privada y paginada de cursos inscritos; falta porcentaje de avance |
+| RF-13 | Implementado | Lista privada y paginada, porcentaje real, barra y empezar/continuar/repasar |
 | RF-14 | Pendiente | Editor de preguntas y nota mínima |
 | RF-15 | Pendiente | Rendir, calificar, aprobar y limitar intentos |
 | RF-16 | Pendiente | Resumen de inscritos, promedios y punto de detención |
@@ -58,24 +63,27 @@ Los cambios se hicieron en el proyecto original, no en `Downloads/26`.
 - React + Vite + Bootstrap, rutas protegidas, Context, Axios, useAuth/useResource.
 - Formularios con validación y feedback, estados de carga/error/vacío.
 - Dockerfiles y Compose con 3 servicios y volumen. El despliegue anterior fue
-  verificado; el nuevo guardado de progreso está pendiente de probar en Docker.
+   verificado; las actualizaciones de progreso están pendientes de probar en Docker.
 
 ## Siguiente bloque recomendado
 
-1. Porcentaje en “Mis cursos”.
-2. Editor de preguntas y nota mínima, sin filtrar respuestas al estudiante.
-3. Calificación, máximo 3 intentos y guardar la mejor nota.
-4. Panel del instructor.
-5. Repetir pruebas con PostgreSQL real y Docker; documentación, video y defensa.
+1. Editor de preguntas y nota mínima, sin filtrar respuestas al estudiante.
+2. Calificación, máximo 3 intentos y guardar la mejor nota.
+3. Panel del instructor.
+4. Repetir pruebas con PostgreSQL real y Docker; documentación, video y defensa.
 
 ## Verificación de esta etapa
 
-- 36 pruebas de API aprobadas con base de datos aislada en memoria; dos pruebas
+- 42 pruebas de API aprobadas con base de datos aislada en memoria; dos pruebas
   de concurrencia se omiten porque necesitan PostgreSQL real.
-- 34 pruebas de frontend aprobadas.
+- 39 pruebas de frontend aprobadas.
 - Recorrido en Edge aprobado: inscripción → Mis cursos → Abrir aula → leer primera
   lección → comprobar siguiente bloqueada → recibir 403 por API y URL directa →
   completar → continuar → recargar y conservar progreso → terminar un curso de contenido.
+- Mis cursos comprobado al empezar, guardar progreso y terminar: barras correctas,
+  recarga persistente, continuar donde corresponde y repasar sin modificar completados.
+- Probada privacidad entre estudiantes, coherencia con el aula, cursos archivados,
+  redondeo, curso vacío y número constante de consultas al ampliar la página.
 - Temario y contenido comprobados a 375px sin desbordamiento horizontal.
 - Compilación de producción de Vite aprobada.
 - Se comprobaron permisos, rechazo de contenido bloqueado, persistencia, repetición
@@ -83,7 +91,7 @@ Los cambios se hicieron en el proyecto original, no en `Downloads/26`.
 - Los casos de notas reprobadas/aprobadas siguen usando fixtures: rendir y calificar
   cuestionarios aún no están implementados.
 - Docker estaba apagado al implementar el guardado de progreso. **Pendiente**:
-  reconstruir contenedores y repetir las 38 pruebas con PostgreSQL real.
+  reconstruir contenedores y repetir las 44 pruebas con PostgreSQL real.
 - No se modificaron `.env`, volúmenes ni datos locales.
 
 ## Evidencia de la versión anterior con inscripciones (no sustituye la nueva comprobación)

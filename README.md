@@ -29,11 +29,11 @@ Marcar lecciones de contenido como completadas, guardar el progreso y desbloquea
 
 Consultar el avance en el aula y conservarlo al recargar, sin duplicar completados.
 
-**Todavía no puedes rendir cuestionarios ni consultar el
+Consultar el avance real de cada curso en Mis cursos, con barra y acciones para empezar, continuar o repasar.
 
-porcentaje en Mis cursos o las estadísticas del instructor.** La lista básica de
+**Todavía no puedes rendir cuestionarios ni consultar las estadísticas del instructor.**
 
-“Mis cursos” no significa que RF-13 esté terminado. Los cuestionarios del seed preparan los datos de la
+Los cuestionarios del seed preparan los datos de la
 
 siguiente etapa; su existencia no significa que el módulo esté terminado.
 
@@ -49,6 +49,11 @@ contenido con POST /api/lecciones/:id/completar. La API calcula el resumen:
 
 no acepta que el cliente indique el porcentaje, la inscripción o la nota.
 Los cuestionarios todavía no muestran preguntas ni reciben intentos; ese endpoint no permite completarlos.
+
+Mis cursos usa el mismo cálculo del aula. Su respuesta incluye completadas, total,
+porcentaje y completado de cada inscripción del usuario autenticado. Los cursos
+archivados conservan su progreso. La lista carga lecciones y progresos en lote,
+sin una consulta adicional por cada tarjeta ni datos privados de otros estudiantes.
 
 La carpeta completa Downloads/26 no se modificó.
 
@@ -309,11 +314,14 @@ Las pruebas de API usan pg-mem, aislado de tu PostgreSQL: verifican migración,
 
 seed, autenticación, filtros, permisos, privacidad, contenido e inscripciones.
 
-En memoria se aprueban 36 pruebas y se omiten dos de concurrencia. El frontend tiene
+En memoria se aprueban 42 pruebas y se omiten dos de concurrencia. El frontend tiene
 
-34 pruebas aprobadas. El recorrido de navegador incluye contenido desbloqueado,
+39 pruebas aprobadas. El recorrido de navegador incluye contenido desbloqueado,
 
 bloqueo 403, guardar completados, desbloquear, recargar, no duplicar y terminar un curso de contenido, a 375px.
+
+También se verifica el progreso de Mis cursos al empezar, continuar y repasar,
+su coherencia con el aula, privacidad, cursos archivados y consultas por página.
 
 Ese adaptador no prueba el bloqueo ni las garantías de rollback de PostgreSQL real.
 
@@ -444,8 +452,7 @@ con revisión del compañero. Este avance no crea commits, PRs ni contribuciones
 
 Pendiente para la entrega:
 
-RF-13 a RF-16: porcentaje en la lista de Mis cursos,
-  editor de preguntas, intentos y calificación en servidor, porcentaje en mis cursos y panel.
+RF-14 a RF-16: editor de preguntas, intentos y calificación en servidor y panel del instructor.
 
 Completar la documentación con esos endpoints y las pruebas de RN-01 a RN-08.
 

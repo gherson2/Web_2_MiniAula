@@ -4,6 +4,7 @@ import { LearningService } from "../services/LearningService";
 import { useResource } from "../hooks/useResource";
 import { Loading, ErrorAlert, EmptyState } from "../components/Feedback";
 import { errorMessage } from "../services/api";
+import { ProgressBar } from "../components/ProgressBar";
 
 function videoLink(value) {
   try {
@@ -85,10 +86,7 @@ function LearningCourse({ initialProgress, lessonId }) {
       <h1>{curso.titulo}</h1></div>
     {lecciones.length > 0 && <div className="surface-panel p-3 mb-4">
       <p className="mb-2">{progress.completadas} de {progress.total} lecciones · {progress.porcentaje} %</p>
-      <div className="progress" role="progressbar" aria-label="Progreso del curso"
-        aria-valuenow={progress.porcentaje} aria-valuemin={0} aria-valuemax={100}>
-        <div className="progress-bar bg-success" style={{ width: `${progress.porcentaje}%` }} />
-      </div>
+      <ProgressBar value={progress.porcentaje} />
       {progress.completado && <p className="text-success fw-semibold mt-3 mb-0" role="status">
         Completaste todas las lecciones de este curso.
       </p>}

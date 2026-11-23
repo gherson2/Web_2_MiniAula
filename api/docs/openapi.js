@@ -28,8 +28,8 @@ function operation(summary, { auth = false, params = [], schema, status = 200 } 
 
 export const openapi = {
   openapi: "3.0.3",
-  info: { title: "MiniAula — progreso del estudiante", version: "0.5.1",
-    description: "Inscripción, lectura de contenido desbloqueado y guardado de lecciones completadas. La API calcula el progreso y desbloquea secuencialmente. Un cuestionario no se puede completar por esta vía: rendir/calificar, porcentaje en Mis cursos y estadísticas siguen pendientes." },
+  info: { title: "MiniAula — seguimiento de cursos", version: "0.5.2",
+    description: "Inscripción, lectura de contenido desbloqueado, guardado de completados y progreso por curso en Mis cursos. El resumen es privado y se calcula en servidor. Rendir/calificar cuestionarios y estadísticas del instructor siguen pendientes." },
   servers: [{ url: "/api" }],
   components: {
     securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" } },
@@ -92,7 +92,7 @@ export const openapi = {
       }),
     },
     "/inscripciones/mias": {
-      get: operation("Mis inscripciones: solo las del estudiante autenticado, sin contenido ni progreso", {
+      get: operation("Mis cursos con progreso privado: completadas, total, porcentaje y completado; sin contenido ni respuestas", {
         auth: true, params: [
           ...query.filter((item) => ["page", "limit"].includes(item.name)),
           { in: "query", name: "cursoId", schema: { type: "integer", minimum: 1 } },
