@@ -110,7 +110,8 @@ try {
   await page.screenshot({ path: `${results}/mis-cursos-inscripciones-movil.png`, fullPage: true });
   await page.reload();
   await page.getByRole("heading", { name: "Curso completo de prueba E2E", exact: true }).waitFor();
-  await page.getByRole("link", { name: /Abrir aula/ }).click();
+  assert.equal(await page.getByRole("progressbar").getAttribute("aria-valuenow"), "0");
+  await page.getByRole("link", { name: /Empezar/ }).click();
   await page.getByRole("heading", { name: "Introducción de prueba", exact: true }).waitFor();
   await page.getByText("Este contenido es privado y no debe salir en el detalle público.", { exact: true }).waitFor();
   assert.ok(await page.getByRole("button", { name: "Segunda lección de prueba: bloqueada" }).isDisabled());
@@ -135,7 +136,11 @@ try {
   await page.reload();
   await page.getByText("Esta lección está completada.", { exact: true }).waitFor();
   assert.equal(await page.getByRole("progressbar").getAttribute("aria-valuenow"), "50");
-  await page.getByRole("link", { name: /Siguiente lección/ }).click();
+  await page.goto(`${base}/mis-cursos`);
+  await page.getByRole("link", { name: /Continuar/ }).waitFor();
+  assert.equal(await page.getByRole("progressbar").getAttribute("aria-valuenow"), "50");
+  await page.reload();
+  await page.getByRole("link", { name: /Continuar/ }).click();
   await page.getByText("Contenido de lección bloqueada.", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Marcar como completada", exact: true }).click();
   await page.getByText("Completaste todas las lecciones de este curso.", { exact: true }).waitFor();
@@ -148,6 +153,16 @@ try {
   await checkWidth(page);
   await page.screenshot({ path: `${results}/progreso-aula-estudiante-movil.png`, fullPage: true });
   await page.goto(`${base}/mis-cursos`);
+  await page.getByRole("link", { name: /Repasar curso/ }).waitFor();
+  assert.equal(await page.getByRole("progressbar").getAttribute("aria-valuenow"), "100");
+  await checkWidth(page);
+  await page.screenshot({ path: `${results}/mis-cursos-progreso-movil.png`, fullPage: true });
+  await page.reload();
+  await page.getByRole("link", { name: /Repasar curso/ }).click();
+  await page.getByRole("heading", { name: "Introducción de prueba", exact: true }).waitFor();
+  await page.getByText("Esta lección está completada.", { exact: true }).waitFor();
+  assert.equal(await page.getByRole("button", { name: "Marcar como completada", exact: true }).count(), 0);
+  await page.goto(`${base}/mis-cursos`);
   await page.getByRole("link", { name: /Ver temario/ }).click();
   await page.getByText("Ya estás inscrito en este curso.", { exact: true }).waitFor();
   assert.equal(await page.getByRole("button", { name: "Inscribirme en este curso" }).count(), 0);
@@ -155,7 +170,7 @@ try {
   await page.getByRole("heading", { name: "Esta sección es para instructores" }).waitFor();
   await checkWidth(page);
   assert.deepEqual(errors, [], "No debe haber excepciones de JavaScript en el navegador.");
-  console.log("E2E correcto: usuarios, cursos, inscripción, aula, bloqueo 403, completar contenido, desbloquear, guardar y recargar progreso, repetición idempotente y curso completado; móvil 375px sin desbordamiento.");
+  console.log("E2E correcto: inscripción, aula, bloqueo, completados persistentes, progreso en Mis cursos, empezar, continuar, repasar y privacidad; móvil 375px sin desbordamiento.");
   console.log("Capturas guardadas en web/test-results/.");
 } finally {
   await browser?.close();

@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import request from "supertest";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { summarizeProgress } from "../utils/progress.js";
 
 // Por defecto se usa memoria. PostgreSQL real requiere habilitación explícita
 // y una BD de pruebas separada cuyo nombre termine en "_test".
@@ -552,4 +553,103 @@ test("PostgreSQL real: completados simultáneos son idempotentes", {
   assert.ok(responses.every((response) => response.status === 200 && response.body.porcentaje === 100));
   assert.equal(await Progreso.count({ where: { inscripcionId: enrolled.body.id } }), 1);
   assert.equal((await Inscripcion.findByPk(enrolled.body.id)).completado, true);
+});
+
+test("mis cursos: usa el mismo resumen que el aula, sin devolver contenido ni notas", async () => {
+  for (const id of [1, completionCourse.id]) {
+    const listed = await api.get(`/api/inscripciones/mias?cursoId=${id}`).set(auth(accounts.student)).expect(200);
+    const aula = await api.get(`/api/cursos/${id}/progreso`).set(auth(accounts.student)).expect(200);
+    const { completadas, total, porcentaje, completado } = aula.body;
+    assert.deepEqual(listed.body.data[0].progreso, { completadas, total, porcentaje, completado });
+    assert.equal(listed.body.data[0].completado, completado);
+    for (const field of ['"contenido":', '"videoUrl":', '"indiceCorrecto":', '"passwordHash":',
+      '"lecciones":', '"mejorNota":', '"intentos":']) {
+      assert.equal(JSON.stringify(listed.body).includes(field), false);
+    }
+  }
+});
+
+test("mis cursos: refleja inicio, progreso guardado, completado y curso archivado", async () => {
+  const course = await Curso.create({ ...courseData, instructorId: accounts.teacher.usuario.id });
+  const lessons = [];
+  for (let orden = 1; orden <= 2; orden++) {
+    lessons.push(await Leccion.create({
+      titulo: `Paso ${orden}`, tipo: "contenido", contenido: "Material", orden, cursoId: course.id,
+    }));
+  }
+  await api.patch(`/api/cursos/${course.id}/estado`).set(auth(accounts.teacher)).send({ estado: "publicado" }).expect(200);
+  await api.post(`/api/cursos/${course.id}/inscripcion`).set(auth(accounts.student)).expect(201);
+  async function listed() {
+    const result = await api.get(`/api/inscripciones/mias?cursoId=${course.id}`).set(auth(accounts.student)).expect(200);
+    return result.body.data[0];
+  }
+  assert.deepEqual((await listed()).progreso, { completadas: 0, total: 2, porcentaje: 0, completado: false });
+  await api.post(`/api/lecciones/${lessons[0].id}/completar`).set(auth(accounts.student)).expect(200);
+  assert.deepEqual((await listed()).progreso, { completadas: 1, total: 2, porcentaje: 50, completado: false });
+  await api.post(`/api/lecciones/${lessons[1].id}/completar`).set(auth(accounts.student)).expect(200);
+  assert.deepEqual((await listed()).progreso, { completadas: 2, total: 2, porcentaje: 100, completado: true });
+  await api.patch(`/api/cursos/${course.id}/estado`).set(auth(accounts.teacher)).send({ estado: "archivado" }).expect(200);
+  const archived = await listed();
+  assert.equal(archived.curso.estado, "archivado");
+  assert.equal(archived.progreso.porcentaje, 100);
+  assert.equal(archived.progreso.completado, true);
+});
+
+test("mis cursos: los avances de otro estudiante no se mezclan", async () => {
+  const primary = await api.get("/api/inscripciones/mias?cursoId=1").set(auth(accounts.student)).expect(200);
+  assert.equal(primary.body.data[0].progreso.porcentaje, 80);
+  const another = await Usuario.findOne({ where: { email: "maria@miniaula.test" } });
+  const token = jwt.sign({}, process.env.JWT_SECRET, { subject: String(another.id), expiresIn: "1h" });
+  const secondary = await api.get("/api/inscripciones/mias?cursoId=1")
+    .set("Authorization", `Bearer ${token}`).expect(200);
+  assert.equal(secondary.body.data[0].progreso.porcentaje, 0);
+  assert.equal(secondary.body.data[0].progreso.completadas, 0);
+});
+
+test("mis cursos: un cuestionario no aprobado no se cuenta como completado", async () => {
+  const course = await Curso.create({ ...courseData, instructorId: accounts.teacher.usuario.id });
+  const quiz = await Leccion.create({
+    titulo: "Evaluación", tipo: "cuestionario", orden: 1, notaMinima: 70, cursoId: course.id,
+  });
+  await api.patch(`/api/cursos/${course.id}/estado`).set(auth(accounts.teacher)).send({ estado: "publicado" }).expect(200);
+  const enrollment = await api.post(`/api/cursos/${course.id}/inscripcion`).set(auth(accounts.student)).expect(201);
+  // Fixture de nota: rendir/calificar cuestionarios aún no está implementado.
+  const saved = await Progreso.create({
+    inscripcionId: enrollment.body.id, leccionId: quiz.id, completada: true, mejorNota: 69,
+  });
+  const failed = await api.get(`/api/inscripciones/mias?cursoId=${course.id}`).set(auth(accounts.student)).expect(200);
+  assert.equal(failed.body.data[0].progreso.porcentaje, 0);
+  assert.equal(failed.body.data[0].completado, false);
+  await saved.update({ mejorNota: 70 });
+  const approved = await api.get(`/api/inscripciones/mias?cursoId=${course.id}`).set(auth(accounts.student)).expect(200);
+  assert.equal(approved.body.data[0].progreso.porcentaje, 100);
+  assert.equal(approved.body.data[0].completado, true);
+});
+
+test("mis cursos: ampliar la página no agrega consultas por cada curso", async () => {
+  const queries = [];
+  const original = sequelize.options.logging;
+  sequelize.options.logging = (sql) => queries.push(sql);
+  try {
+    await api.get("/api/inscripciones/mias?limit=1").set(auth(accounts.student)).expect(200);
+    const singleCount = queries.length;
+    queries.length = 0;
+    const many = await api.get("/api/inscripciones/mias?limit=50").set(auth(accounts.student)).expect(200);
+    assert.ok(many.body.data.length > 1);
+    assert.equal(queries.length, singleCount);
+    assert.ok(queries.length <= 5, "Solo sesión, conteo, lista y dos consultas de progreso.");
+  } finally { sequelize.options.logging = original; }
+  const empty = await api.get("/api/inscripciones/mias?page=100000").set(auth(accounts.student)).expect(200);
+  assert.deepEqual(empty.body.data, []);
+});
+
+test("resumen: maneja cursos vacíos y redondea sin dividir por cero", () => {
+  const empty = summarizeProgress([], []);
+  assert.equal(empty.porcentaje, 0);
+  assert.equal(empty.completado, false);
+  const lessons = [1, 2, 3].map((id) => ({ id, tipo: "contenido", orden: id }));
+  assert.equal(summarizeProgress(lessons, [{ leccionId: 1, completada: true }]).porcentaje, 33);
+  assert.equal(summarizeProgress(lessons, [
+    { leccionId: 1, completada: true }, { leccionId: 2, completada: true },
+  ]).porcentaje, 67);
 });

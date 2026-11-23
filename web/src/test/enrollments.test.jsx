@@ -16,6 +16,7 @@ const result = (data = [], total = data.length) => ({
 });
 const enrollment = {
   id: 10, fechaInscripcion: "2026-11-21T10:00:00Z", cursoId: 1,
+  progreso: { completadas: 0, total: 5, porcentaje: 0, completado: false },
   curso: { id: 1, titulo: "Node.js desde cero", categoria: "Programación",
     nivel: "basico", estado: "publicado", instructor: { nombre: "Ana Pérez" } },
 };
@@ -86,7 +87,8 @@ it("mis cursos: conserva cursos archivados sin enlazar a un detalle público ine
   expect(await screen.findByRole("heading", { name: "Node.js desde cero" })).toBeInTheDocument();
   expect(screen.getByText("Este curso fue archivado. Tu inscripción se conserva.")).toBeInTheDocument();
   expect(screen.queryByRole("link", { name: /Ver temario/ })).not.toBeInTheDocument();
-  expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+  expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
+  expect(screen.getByRole("link", { name: /Empezar/ })).toHaveAttribute("href", "/aprender/1");
 });
 
 it("mis cursos: pagina a través de la capa de servicios", async () => {
@@ -107,4 +109,61 @@ it("mis cursos del estudiante: un instructor no puede entrar", () => {
   </AuthContext.Provider></MemoryRouter>);
   expect(screen.getByRole("heading", { name: "Esta sección es para estudiantes" })).toBeInTheDocument();
   expect(EnrollmentService.mine).not.toHaveBeenCalled();
+});
+
+it("mis cursos: muestra progreso inicial y acción para empezar", async () => {
+  EnrollmentService.mine.mockResolvedValue(result([enrollment]));
+  wrap(<MyCoursesPage />);
+  expect(await screen.findByText("0 de 5 lecciones · 0 %")).toBeInTheDocument();
+  expect(screen.getByRole("progressbar", { name: "Progreso de Node.js desde cero" }))
+    .toHaveAttribute("aria-valuenow", "0");
+  expect(screen.getByText("Sin empezar")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Empezar/ })).toHaveAttribute("href", "/aprender/1");
+});
+
+it("mis cursos: muestra progreso parcial y permite continuar", async () => {
+  EnrollmentService.mine.mockResolvedValue(result([{
+    ...enrollment, progreso: { completadas: 2, total: 5, porcentaje: 40, completado: false },
+  }]));
+  wrap(<MyCoursesPage />);
+  expect(await screen.findByText("2 de 5 lecciones · 40 %")).toBeInTheDocument();
+  expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "40");
+  expect(screen.getByText("En curso")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Continuar/ })).toHaveAttribute("href", "/aprender/1");
+});
+
+it("mis cursos: permite repasar un curso completado incluso si fue archivado", async () => {
+  EnrollmentService.mine.mockResolvedValue(result([{
+    ...enrollment, curso: { ...enrollment.curso, estado: "archivado" },
+    progreso: { completadas: 5, total: 5, porcentaje: 100, completado: true },
+  }]));
+  wrap(<MyCoursesPage />);
+  expect(await screen.findByText("5 de 5 lecciones · 100 %")).toBeInTheDocument();
+  expect(screen.getByText("Completado")).toBeInTheDocument();
+  expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
+  expect(screen.getByRole("link", { name: /Repasar curso/ })).toHaveAttribute("href", "/aprender/1");
+  expect(screen.queryByRole("link", { name: /Ver temario/ })).not.toBeInTheDocument();
+});
+
+it("mis cursos: cada barra corresponde a su propio curso", async () => {
+  EnrollmentService.mine.mockResolvedValue(result([
+    enrollment,
+    { ...enrollment, id: 11, curso: { ...enrollment.curso, id: 2, titulo: "Diseño de interfaces" },
+      progreso: { completadas: 1, total: 2, porcentaje: 50, completado: false } },
+  ]));
+  wrap(<MyCoursesPage />);
+  expect(await screen.findByRole("progressbar", { name: "Progreso de Node.js desde cero" }))
+    .toHaveAttribute("aria-valuenow", "0");
+  expect(screen.getByRole("progressbar", { name: "Progreso de Diseño de interfaces" }))
+    .toHaveAttribute("aria-valuenow", "50");
+});
+
+it("mis cursos: un curso sin lecciones no aparece como completado", async () => {
+  EnrollmentService.mine.mockResolvedValue(result([{
+    ...enrollment, progreso: { completadas: 0, total: 0, porcentaje: 0, completado: false },
+  }]));
+  wrap(<MyCoursesPage />);
+  expect(await screen.findByText("0 de 0 lecciones · 0 %")).toBeInTheDocument();
+  expect(screen.queryByText("Completado")).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Ver aula/ })).toBeInTheDocument();
 });
