@@ -1,8 +1,9 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { LearningService } from "../services/LearningService";
 import { useResource } from "../hooks/useResource";
 import { Loading, ErrorAlert, EmptyState } from "../components/Feedback";
+import { errorMessage } from "../services/api";
 
 function videoLink(value) {
   try {
@@ -11,8 +12,20 @@ function videoLink(value) {
   } catch { return null; }
 }
 
-function LessonViewer({ lessonId }) {
+function LessonViewer({ lessonId, status, nextLesson, courseId, onCompleted }) {
   const resource = useResource(useCallback((signal) => LearningService.lesson(lessonId, signal), [lessonId]));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+  async function complete() {
+    setBusy(true); setError(""); setSuccess(false);
+    try {
+      const progress = await LearningService.complete(lessonId);
+      onCompleted(progress);
+      setSuccess(true);
+    } catch (err) { setError(errorMessage(err)); }
+    finally { setBusy(false); }
+  }
   if (resource.loading) return <Loading />;
   if (resource.error) return <ErrorAlert message={resource.error} retry={resource.reload} />;
   const lesson = resource.data;
@@ -26,9 +39,19 @@ function LessonViewer({ lessonId }) {
       {video && <a className="btn btn-outline-primary mb-4" href={video} target="_blank" rel="noopener noreferrer">Abrir enlace del video ↗</a>}
       {lesson.contenido ? <div className="lesson-content">{lesson.contenido}</div> :
         <p className="text-secondary">Esta lección utiliza el enlace de video como material de estudio.</p>}
+      <div className="mt-4">
+        <ErrorAlert message={error} />
+        {success && <div className="alert alert-success" role="status">Lección guardada como completada.</div>}
+        {status.completada ? <p className="text-success fw-semibold">Esta lección está completada.</p> :
+          <button className="btn btn-primary" disabled={busy} onClick={complete}>
+            {busy ? "Guardando progreso…" : "Marcar como completada"}
+          </button>}
+      </div>
     </>}
-    <div className="stage-notice mt-4">Ya puedes consultar el contenido desbloqueado.
-      Marcar lecciones como completadas y continuar con el avance se añadirá en la siguiente etapa.</div>
+    {status.completada && nextLesson && !nextLesson.bloqueada &&
+      <Link className="btn btn-outline-primary mt-3" to={`/aprender/${courseId}/lecciones/${nextLesson.id}`}>
+        Siguiente lección →
+      </Link>}
   </article>;
 }
 
@@ -40,15 +63,36 @@ export function LearningPage() {
     <Link className="back-link" to="/mis-cursos">← Mis cursos</Link>
     <ErrorAlert message={resource.error} retry={resource.reload} />
   </>;
-  const { curso, lecciones } = resource.data;
-  const first = lecciones.find((lesson) => !lesson.bloqueada && !lesson.completada) ||
-    lecciones.find((lesson) => !lesson.bloqueada);
-  const selectedId = lessonId || (first ? String(first.id) : null);
+  return <LearningCourse key={id} initialProgress={resource.data} lessonId={lessonId} />;
+}
+
+function LearningCourse({ initialProgress, lessonId }) {
+  const [progress, setProgress] = useState(initialProgress);
+  const { curso, lecciones } = progress;
+  // Conservar la lección actual al guardar. El alumno elige cuándo continuar.
+  const [initialId] = useState(() => {
+    const first = initialProgress.lecciones.find((lesson) => !lesson.bloqueada && !lesson.completada) ||
+      initialProgress.lecciones.find((lesson) => !lesson.bloqueada);
+    return first ? String(first.id) : null;
+  });
+  const selectedId = lessonId || initialId;
   const selected = lecciones.find((lesson) => String(lesson.id) === selectedId);
+  const nextLesson = lecciones[lecciones.findIndex((lesson) => String(lesson.id) === selectedId) + 1];
+  const id = curso.id;
   return <>
     <Link className="back-link" to="/mis-cursos">← Mis cursos</Link>
     <div className="learning-header mb-4"><span className="eyebrow">AULA DEL ESTUDIANTE</span>
       <h1>{curso.titulo}</h1></div>
+    {lecciones.length > 0 && <div className="surface-panel p-3 mb-4">
+      <p className="mb-2">{progress.completadas} de {progress.total} lecciones · {progress.porcentaje} %</p>
+      <div className="progress" role="progressbar" aria-label="Progreso del curso"
+        aria-valuenow={progress.porcentaje} aria-valuemin={0} aria-valuemax={100}>
+        <div className="progress-bar bg-success" style={{ width: `${progress.porcentaje}%` }} />
+      </div>
+      {progress.completado && <p className="text-success fw-semibold mt-3 mb-0" role="status">
+        Completaste todas las lecciones de este curso.
+      </p>}
+    </div>}
     {curso.estado === "archivado" && <div className="stage-notice mb-4">
       El curso fue archivado. Conservas tu inscripción y acceso a las lecciones desbloqueadas.
     </div>}
@@ -71,7 +115,8 @@ export function LearningPage() {
           <p className="small text-secondary mt-3 mb-0">Las siguientes lecciones permanecen bloqueadas hasta completar las anteriores.</p>
         </nav></aside>
         <section className="col-lg-8" aria-label="Contenido de la lección">
-          {selected ? <LessonViewer key={selectedId} lessonId={selectedId} /> :
+          {selected ? <LessonViewer key={selectedId} lessonId={selectedId} status={selected}
+            nextLesson={nextLesson} courseId={id} onCompleted={setProgress} /> :
             <ErrorAlert message="La lección no pertenece a este curso." />}
         </section>
       </div>}

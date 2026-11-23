@@ -128,6 +128,25 @@ try {
   assert.equal((await denied.json()).error.code, "LESSON_LOCKED");
   await page.goto(`${base}/aprender/${courseId}/lecciones/${blockedId}`);
   await page.getByRole("alert").filter({ hasText: "Completa las lecciones anteriores" }).waitFor();
+  await page.goto(`${base}/aprender/${courseId}/lecciones/${outline.lecciones[0].id}`);
+  await page.getByRole("button", { name: "Marcar como completada", exact: true }).click();
+  await page.getByText("Lección guardada como completada.", { exact: true }).waitFor();
+  assert.equal(await page.getByRole("progressbar", { name: "Progreso del curso" }).getAttribute("aria-valuenow"), "50");
+  await page.reload();
+  await page.getByText("Esta lección está completada.", { exact: true }).waitFor();
+  assert.equal(await page.getByRole("progressbar").getAttribute("aria-valuenow"), "50");
+  await page.getByRole("link", { name: /Siguiente lección/ }).click();
+  await page.getByText("Contenido de lección bloqueada.", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Marcar como completada", exact: true }).click();
+  await page.getByText("Completaste todas las lecciones de este curso.", { exact: true }).waitFor();
+  await page.reload();
+  await page.getByText("Completaste todas las lecciones de este curso.", { exact: true }).waitFor();
+  assert.equal(await page.getByRole("progressbar").getAttribute("aria-valuenow"), "100");
+  const repeated = await page.request.post(`${process.env.VITE_API_URL}/lecciones/${outline.lecciones[0].id}/completar`, { headers });
+  assert.equal(repeated.status(), 200);
+  assert.equal((await repeated.json()).completadas, 2);
+  await checkWidth(page);
+  await page.screenshot({ path: `${results}/progreso-aula-estudiante-movil.png`, fullPage: true });
   await page.goto(`${base}/mis-cursos`);
   await page.getByRole("link", { name: /Ver temario/ }).click();
   await page.getByText("Ya estás inscrito en este curso.", { exact: true }).waitFor();
@@ -136,7 +155,7 @@ try {
   await page.getByRole("heading", { name: "Esta sección es para instructores" }).waitFor();
   await checkWidth(page);
   assert.deepEqual(errors, [], "No debe haber excepciones de JavaScript en el navegador.");
-  console.log("E2E correcto: catálogo, usuarios, cursos, inscripción, mis cursos, aula, contenido privado, bloqueo 403 por API y URL directa, sesión y permisos; móvil 375px sin desbordamiento.");
+  console.log("E2E correcto: usuarios, cursos, inscripción, aula, bloqueo 403, completar contenido, desbloquear, guardar y recargar progreso, repetición idempotente y curso completado; móvil 375px sin desbordamiento.");
   console.log("Capturas guardadas en web/test-results/.");
 } finally {
   await browser?.close();

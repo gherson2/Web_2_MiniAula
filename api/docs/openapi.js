@@ -28,8 +28,8 @@ function operation(summary, { auth = false, params = [], schema, status = 200 } 
 
 export const openapi = {
   openapi: "3.0.3",
-  info: { title: "MiniAula — aula del estudiante", version: "0.5.0",
-    description: "Incluye inscripción y lectura de contenido desbloqueado para estudiantes inscritos, con bloqueo secuencial en servidor y consulta de progreso solo lectura. Todavía no se pueden completar lecciones ni rendir cuestionarios. Porcentaje en Mis cursos y estadísticas siguen pendientes. El logout elimina la sesión del cliente; el JWT expira en 2 horas por defecto." },
+  info: { title: "MiniAula — progreso del estudiante", version: "0.5.1",
+    description: "Inscripción, lectura de contenido desbloqueado y guardado de lecciones completadas. La API calcula el progreso y desbloquea secuencialmente. Un cuestionario no se puede completar por esta vía: rendir/calificar, porcentaje en Mis cursos y estadísticas siguen pendientes." },
   servers: [{ url: "/api" }],
   components: {
     securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" } },
@@ -100,7 +100,12 @@ export const openapi = {
       }),
     },
     "/cursos/{id}/progreso": {
-      get: operation("Mi temario con estados de acceso y resumen de progreso, sin contenido. Solo lectura.", {
+      get: operation("Mi temario, completadas, total, porcentaje y completado, sin contenido de lecciones.", {
+        auth: true, params: [id],
+      }),
+    },
+    "/lecciones/{id}/completar": {
+      post: operation("Completar contenido desbloqueado y recibir progreso actualizado. Sin cuerpo; repetible sin duplicar. 403 bloqueada, 409 cuestionario.", {
         auth: true, params: [id],
       }),
     },

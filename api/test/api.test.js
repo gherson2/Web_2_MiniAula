@@ -385,8 +385,7 @@ test("aula: saltar por URL o API a cualquier lección bloqueada devuelve 403 sin
 test("aula: interpreta progreso propio guardado sin compartirlo con otro estudiante", async () => {
   const [first, second, third] = await learningLessons();
   const enrollment = await learningEnrollment();
-  // Solo fixture de prueba: el endpoint para completar sigue pendiente.
-  await Progreso.create({ inscripcionId: enrollment.id, leccionId: first.id, completada: true });
+  await api.post(`/api/lecciones/${first.id}/completar`).set(auth(accounts.student)).expect(200);
   await api.get(`/api/lecciones/${second.id}`).set(auth(accounts.student)).expect(200);
   await api.get(`/api/lecciones/${third.id}`).set(auth(accounts.student)).expect(403);
   const mine = await api.get("/api/cursos/1/progreso").set(auth(accounts.student)).expect(200);
@@ -399,7 +398,8 @@ test("aula: interpreta progreso propio guardado sin compartirlo con otro estudia
   const otherProgress = await api.get("/api/cursos/1/progreso").set(headers).expect(200);
   assert.equal(otherProgress.body.porcentaje, 0);
   await api.get(`/api/lecciones/${second.id}`).set(headers).expect(403);
-  await api.post(`/api/lecciones/${first.id}/completar`).set(auth(accounts.student)).expect(404);
+  await api.post(`/api/lecciones/${first.id}/completar`).set(auth(accounts.student)).expect(200);
+  assert.equal(await Progreso.count({ where: { inscripcionId: enrollment.id, leccionId: first.id } }), 1);
 });
 
 test("aula: un cuestionario anterior requiere aprobación; sus preguntas y claves siguen ocultas", async () => {
@@ -433,4 +433,123 @@ test("aula: conserva acceso a inscritos al archivar, pero no entrega contenido e
     await api.get("/api/cursos/1/progreso").set(auth(accounts.student)).expect(404);
     await api.get(`/api/lecciones/${first.id}`).set(auth(accounts.student)).expect(404);
   } finally { await course.update({ estado: "publicado" }); }
+});
+
+let completionCourse;
+let completionLessons;
+let completionEnrollment;
+
+test("completar: valida sesión, rol, inscripción y no acepta progreso proporcionado por el cliente", async () => {
+  const [first] = await learningLessons();
+  const path = `/api/lecciones/${first.id}/completar`;
+  await api.post(path).expect(401);
+  await api.post(path).set(auth(accounts.teacher)).expect(403);
+  await api.post(path).set(auth(accounts.student)).send({ completada: true, porcentaje: 100 }).expect(422);
+  await api.post(path).set(auth(accounts.student)).send({ inscripcionId: 999, estudianteId: 1 }).expect(422);
+  await api.post(`${path}?estudianteId=1`).set(auth(accounts.student)).expect(422);
+  await api.post("/api/lecciones/invalido/completar").set(auth(accounts.student)).expect(422);
+  await api.post("/api/lecciones/2147483647/completar").set(auth(accounts.student)).expect(404);
+  const otherCourseLesson = await Leccion.findOne({ where: { cursoId: 2 } });
+  await api.post(`/api/lecciones/${otherCourseLesson.id}/completar`).set(auth(accounts.student)).expect(403);
+});
+
+test("completar: rechaza saltarse la lección anterior sin escribir progreso", async () => {
+  completionCourse = await Curso.create({ ...courseData, instructorId: accounts.teacher.usuario.id });
+  completionLessons = [];
+  for (const [index, titulo] of ["Contenido inicial", "Contenido final"].entries()) {
+    completionLessons.push(await Leccion.create({
+      titulo, tipo: "contenido", contenido: "Material de estudio", orden: index + 1, cursoId: completionCourse.id,
+    }));
+  }
+  await api.patch(`/api/cursos/${completionCourse.id}/estado`).set(auth(accounts.teacher))
+    .send({ estado: "publicado" }).expect(200);
+  const enrolled = await api.post(`/api/cursos/${completionCourse.id}/inscripcion`).set(auth(accounts.student)).expect(201);
+  completionEnrollment = enrolled.body.id;
+  const blocked = await api.post(`/api/lecciones/${completionLessons[1].id}/completar`)
+    .set(auth(accounts.student)).expect(403);
+  assert.equal(blocked.body.error.code, "LESSON_LOCKED");
+  assert.equal(await Progreso.count({ where: { inscripcionId: completionEnrollment } }), 0);
+});
+
+test("completar: guarda una lección, calcula el progreso y desbloquea la siguiente", async () => {
+  const result = await api.post(`/api/lecciones/${completionLessons[0].id}/completar`)
+    .set(auth(accounts.student)).expect(200);
+  assert.equal(result.body.completadas, 1);
+  assert.equal(result.body.total, 2);
+  assert.equal(result.body.porcentaje, 50);
+  assert.equal(result.body.completado, false);
+  assert.equal(result.body.lecciones[0].completada, true);
+  assert.equal(result.body.lecciones[1].bloqueada, false);
+  const saved = await Progreso.findOne({
+    where: { inscripcionId: completionEnrollment, leccionId: completionLessons[0].id },
+  });
+  assert.equal(saved.completada, true);
+  assert.equal(saved.intentos, 0);
+  assert.equal(saved.mejorNota, 0);
+  await api.get(`/api/lecciones/${completionLessons[1].id}`).set(auth(accounts.student)).expect(200);
+});
+
+test("completar: repetir o recargar mantiene una sola fila y el mismo avance", async () => {
+  const path = `/api/lecciones/${completionLessons[0].id}/completar`;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const result = await api.post(path).set(auth(accounts.student)).send({}).expect(200);
+    assert.equal(result.body.porcentaje, 50);
+  }
+  assert.equal(await Progreso.count({ where: { inscripcionId: completionEnrollment } }), 1);
+  const reloaded = await api.get(`/api/cursos/${completionCourse.id}/progreso`).set(auth(accounts.student)).expect(200);
+  assert.equal(reloaded.body.completadas, 1);
+  assert.equal(reloaded.body.porcentaje, 50);
+});
+
+test("completar: al terminar todas las lecciones de contenido persiste el curso completado", async () => {
+  const result = await api.post(`/api/lecciones/${completionLessons[1].id}/completar`)
+    .set(auth(accounts.student)).expect(200);
+  assert.equal(result.body.porcentaje, 100);
+  assert.equal(result.body.completado, true);
+  const enrollment = await Inscripcion.findByPk(completionEnrollment);
+  assert.equal(enrollment.completado, true);
+  assert.equal(await Progreso.count({ where: { inscripcionId: completionEnrollment } }), 2);
+  const reloaded = await api.get(`/api/cursos/${completionCourse.id}/progreso`).set(auth(accounts.student)).expect(200);
+  assert.equal(reloaded.body.completado, true);
+  assert.equal(reloaded.body.porcentaje, 100);
+});
+
+test("completar: no permite completar cuestionarios ni desbloquearlos como si fueran contenido", async () => {
+  const course = await Curso.create({ ...courseData, instructorId: accounts.teacher.usuario.id });
+  const quiz = await Leccion.create({
+    titulo: "Cuestionario obligatorio", tipo: "cuestionario", orden: 1, cursoId: course.id,
+  });
+  const next = await Leccion.create({
+    titulo: "Después del cuestionario", tipo: "contenido", contenido: "Texto", orden: 2, cursoId: course.id,
+  });
+  await api.patch(`/api/cursos/${course.id}/estado`).set(auth(accounts.teacher)).send({ estado: "publicado" }).expect(200);
+  const enrolled = await api.post(`/api/cursos/${course.id}/inscripcion`).set(auth(accounts.student)).expect(201);
+  const response = await api.post(`/api/lecciones/${quiz.id}/completar`).set(auth(accounts.student)).expect(409);
+  assert.equal(response.body.error.code, "QUIZ_REQUIRED");
+  await api.post(`/api/lecciones/${next.id}/completar`).set(auth(accounts.student)).expect(403);
+  assert.equal(await Progreso.count({ where: { inscripcionId: enrolled.body.id } }), 0);
+});
+
+test("completar: otro estudiante no puede modificar un curso en el que no está inscrito", async () => {
+  const another = await Usuario.findOne({ where: { email: "pedro@miniaula.test" } });
+  const token = jwt.sign({}, process.env.JWT_SECRET, { subject: String(another.id), expiresIn: "1h" });
+  await api.post(`/api/lecciones/${completionLessons[0].id}/completar`)
+    .set("Authorization", `Bearer ${token}`).expect(403);
+  const enrollment = await Inscripcion.findByPk(completionEnrollment);
+  assert.equal(enrollment.completado, true);
+  assert.equal(await Progreso.count({ where: { inscripcionId: completionEnrollment } }), 2);
+});
+
+test("PostgreSQL real: completados simultáneos son idempotentes", {
+  skip: process.env.API_TEST_POSTGRES !== "true" && "Requiere bloqueo de filas de PostgreSQL real.",
+}, async () => {
+  const course = await Curso.create({ ...courseData, instructorId: accounts.teacher.usuario.id });
+  const lesson = await Leccion.create({ titulo: "Única", tipo: "contenido", contenido: "Texto", orden: 1, cursoId: course.id });
+  await api.patch(`/api/cursos/${course.id}/estado`).set(auth(accounts.teacher)).send({ estado: "publicado" }).expect(200);
+  const enrolled = await api.post(`/api/cursos/${course.id}/inscripcion`).set(auth(accounts.student)).expect(201);
+  const responses = await Promise.all(Array.from({ length: 8 }, () =>
+    api.post(`/api/lecciones/${lesson.id}/completar`).set(auth(accounts.student))));
+  assert.ok(responses.every((response) => response.status === 200 && response.body.porcentaje === 100));
+  assert.equal(await Progreso.count({ where: { inscripcionId: enrolled.body.id } }), 1);
+  assert.equal((await Inscripcion.findByPk(enrolled.body.id)).completado, true);
 });

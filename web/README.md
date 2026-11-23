@@ -3,8 +3,9 @@
 SPA con React, Vite, JavaScript y Bootstrap. Incluye autenticación, perfil,
 catálogo, detalle público y editor de cursos/lecciones del instructor.
 Incluye inscripción, lista privada y aula del estudiante con lectura de contenido
-desbloqueado y temario bloqueado. Completar, rendir y el porcentaje en Mis cursos
-siguen pendientes.
+desbloqueado y temario bloqueado. Permite completar contenido, guardar el progreso,
+ver la barra del aula y continuar a la siguiente lección. Rendir y el porcentaje
+en la lista de Mis cursos siguen pendientes.
 
 Consulta el [README principal](../README.md) para Docker, cuentas y alcance.
 
@@ -24,5 +25,5 @@ La API debe estar levantada y `VITE_API_URL` debe apuntar a ella.
   dependencias instaladas también en `../api`.
 
 El frontend no utiliza datos inventados como sustituto de la API. La lista de
-inscripciones y el aula usan el servidor. El resumen de progreso es de solo lectura;
-guardar completados y rendir cuestionarios siguen pendientes.
+inscripciones, el aula y el guardado de progreso usan el servidor. Solo se actualiza
+la UI al confirmar la API. Rendir cuestionarios sigue pendiente.

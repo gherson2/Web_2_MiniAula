@@ -1,18 +1,16 @@
-# Estado de MiniAula — aula del estudiante (~50 % orientativo)
+# Estado de MiniAula — progreso del estudiante
 
-No es una nota calculada con la rúbrica: el avance secuencial, los cuestionarios y
-el panel concentran una parte importante del trabajo restante.
+Los cuestionarios y el panel concentran una parte importante del trabajo restante.
 “Implementado” no reemplaza la comprobación del docente ni la prueba de Docker.
 
-## Incremento de esta entrega
+## Funcionalidades incorporadas
 
-Se añade un bloque orientativo de 5 puntos porcentuales sobre el avance del 45 %:
-aula del estudiante, lectura de contenido y video, temario con estados de acceso,
-autorización por inscripción y bloqueo secuencial en servidor.
-La primera lección está disponible al inscribirse. El servidor interpreta las filas
-de progreso existentes y exige aprobar un cuestionario previo para seguir.
-Todavía NO se implementa completar lecciones ni rendir cuestionarios: sin progreso
-guardado, solo se puede leer la primera lección. No se simulan acciones completadas.
+El estudiante puede marcar contenido desbloqueado como completado, guardar su
+progreso y continuar a la siguiente lección. La API calcula el resumen y el aula
+actualiza temario, barra y estado del curso únicamente tras confirmar el guardado.
+Repetir una solicitud no duplica filas ni suma otra vez la misma lección.
+Los cuestionarios no se pueden completar con ese endpoint: todavía falta rendirlos
+y calificarlos en servidor. Un cuestionario anterior sin aprobar mantiene el bloqueo.
 Los cambios se hicieron en el proyecto original, no en `Downloads/26`.
 
 ## Funcionalidades
@@ -30,7 +28,7 @@ Los cambios se hicieron en el proyecto original, no en `Downloads/26`.
 | RF-09 | Implementado | Ordenar con flechas y validación completa en servidor |
 | RF-10 | Implementado | Aula, texto/video de contenido desbloqueado y bloqueo validado en servidor |
 | RF-11 | Implementado | Inscribirse desde el detalle, solo estudiante y curso publicado |
-| RF-12 | Pendiente | Completar lecciones |
+| RF-12 | Implementado | Completar contenido desbloqueado y persistir progreso propio |
 | RF-13 | Parcial | Lista privada y paginada de cursos inscritos; falta porcentaje de avance |
 | RF-14 | Pendiente | Editor de preguntas y nota mínima |
 | RF-15 | Pendiente | Rendir, calificar, aprobar y limitar intentos |
@@ -40,7 +38,7 @@ Los cambios se hicieron en el proyecto original, no en `Downloads/26`.
 
 | Código | Estado |
 |---|---|
-| RN-01 | Bloqueo de lectura implementado en servidor; falta el flujo que guarda completados/aprobación |
+| RN-01 | Bloqueo y completado de contenido implementados en servidor; falta flujo de aprobación de cuestionarios |
 | RN-02 | Parcial: endpoints públicos no exponen respuestas; falta calificación |
 | RN-03 | Pendiente: límite de 3 intentos y mejor nota (campos y CHECK preparados) |
 | RN-04 | Implementado: inscripción única, error 409 y bloqueo de concurrencia en PostgreSQL |
@@ -59,35 +57,36 @@ Los cambios se hicieron en el proyecto original, no en `Downloads/26`.
 - Swagger para **todos los endpoints implementados**, no para los pendientes.
 - React + Vite + Bootstrap, rutas protegidas, Context, Axios, useAuth/useResource.
 - Formularios con validación y feedback, estados de carga/error/vacío.
-- Dockerfiles y Compose con 3 servicios y volumen. El arranque del 45 % fue
-  verificado; el nuevo código del aula está pendiente de reconstruir/probar en Docker.
+- Dockerfiles y Compose con 3 servicios y volumen. El despliegue anterior fue
+  verificado; el nuevo guardado de progreso está pendiente de probar en Docker.
 
 ## Siguiente bloque recomendado
 
-1. Completar contenido, guardar progreso y actualizar el desbloqueo.
-2. Porcentaje en “Mis cursos”.
-3. Editor de preguntas y nota mínima, sin filtrar respuestas al estudiante.
-4. Calificación, máximo 3 intentos y guardar la mejor nota.
-5. Panel del instructor.
-6. Repetir pruebas con PostgreSQL real y Docker; documentación, video y defensa.
+1. Porcentaje en “Mis cursos”.
+2. Editor de preguntas y nota mínima, sin filtrar respuestas al estudiante.
+3. Calificación, máximo 3 intentos y guardar la mejor nota.
+4. Panel del instructor.
+5. Repetir pruebas con PostgreSQL real y Docker; documentación, video y defensa.
 
 ## Verificación de esta etapa
 
-- 29 pruebas de API aprobadas con base de datos aislada en memoria; una prueba
-  de concurrencia se omite porque necesita PostgreSQL real.
-- 28 pruebas de frontend aprobadas.
+- 36 pruebas de API aprobadas con base de datos aislada en memoria; dos pruebas
+  de concurrencia se omiten porque necesitan PostgreSQL real.
+- 34 pruebas de frontend aprobadas.
 - Recorrido en Edge aprobado: inscripción → Mis cursos → Abrir aula → leer primera
-  lección → comprobar siguiente bloqueada → recibir 403 por API y URL directa.
+  lección → comprobar siguiente bloqueada → recibir 403 por API y URL directa →
+  completar → continuar → recargar y conservar progreso → terminar un curso de contenido.
 - Temario y contenido comprobados a 375px sin desbordamiento horizontal.
 - Compilación de producción de Vite aprobada.
-- Se comprobaron privacidad entre estudiantes, rechazo sin inscripción y lectura
-  de progreso de prueba, incluido cuestionario reprobado/aprobado, sin exponer claves.
-  Los progresos de prueba son fixtures, no un endpoint de completar ya implementado.
-- Docker estaba apagado al implementar el aula. **Pendiente**: reconstruir los
-  contenedores y repetir las 30 pruebas con PostgreSQL real (incluida concurrencia).
+- Se comprobaron permisos, rechazo de contenido bloqueado, persistencia, repetición
+  idempotente, curso completado y prohibición de completar cuestionarios como contenido.
+- Los casos de notas reprobadas/aprobadas siguen usando fixtures: rendir y calificar
+  cuestionarios aún no están implementados.
+- Docker estaba apagado al implementar el guardado de progreso. **Pendiente**:
+  reconstruir contenedores y repetir las 38 pruebas con PostgreSQL real.
 - No se modificaron `.env`, volúmenes ni datos locales.
 
-## Evidencia anterior del avance del 45 % (no sustituye la nueva comprobación)
+## Evidencia de la versión anterior con inscripciones (no sustituye la nueva comprobación)
 
 - Las 23 pruebas de API aprobadas contra PostgreSQL 16 en Docker, utilizando
   una base temporal independiente que se eliminó al terminar.

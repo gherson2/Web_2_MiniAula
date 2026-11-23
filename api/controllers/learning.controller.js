@@ -4,3 +4,6 @@ export const progress = async (req, res) => res.json(await learning.courseProgre
 export const lesson = async (req, res) => res.json(
   await learning.readLesson(req.enrollment, req.validated.params.id),
 );
+export const complete = async (req, res) => res.json(
+  await learning.completeLesson(req.enrollment, req.validated.params.id),
+);
