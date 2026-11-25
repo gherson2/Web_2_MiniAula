@@ -142,6 +142,9 @@ h1, h2, h3 { font-weight: 700; letter-spacing: -.035em; }
 .lesson-menu-item strong { display: block; font-size: .82rem; font-weight: 600; overflow-wrap: anywhere; }
 .lesson-menu-item small { display: block; margin-top: 4px; font-size: .7rem; color: var(--muted); }
 .lesson-content { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.85; }
+.question-list { padding-left: 24px; margin-bottom: 0; }
+.question-list > li { padding: 20px 0; border-top: 1px solid var(--line); }
+.question-list h3, .question-list li { overflow-wrap: anywhere; white-space: pre-wrap; }
 @media (min-width: 1400px) { .container { max-width: 1160px; } }
 @media (max-width: 991px) {
   .app-nav { gap: 24px; }

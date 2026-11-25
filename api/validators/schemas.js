@@ -34,12 +34,35 @@ export const enrollmentQuery = z.object({
 export const stateBody = z.object({ estado: z.enum(["publicado", "archivado"]) }).strict();
 export const lessonBody = z.object({
   titulo: text(150),
+  tipo: z.enum(["contenido", "cuestionario"]).default("contenido"),
+  notaMinima: z.number().int().min(0).max(100).default(70),
   contenido: z.string().trim().max(50000).default(""),
   videoUrl: z.union([z.literal(""), z.string().url().max(2048)
     .refine((v) => ["http:", "https:"].includes(new URL(v).protocol), "Usa http o https.")]).default(""),
-}).strict().refine((v) => v.contenido.length > 0 || v.videoUrl.length > 0, {
-  message: "Escribe contenido o agrega un enlace a video.", path: ["contenido"],
+}).strict().superRefine((value, context) => {
+  if (value.tipo === "contenido" && !value.contenido && !value.videoUrl) {
+    context.addIssue({ code: "custom", message: "Escribe contenido o agrega un enlace a video.", path: ["contenido"] });
+  }
+  if (value.tipo === "cuestionario" && (value.contenido || value.videoUrl)) {
+    context.addIssue({ code: "custom", message: "Un cuestionario utiliza preguntas, no contenido o video.", path: ["contenido"] });
+  }
 });
+export const questionBody = z.object({
+  enunciado: text(2000),
+  opciones: z.array(text(500)).min(2).max(6),
+  indiceCorrecto: z.number().int().min(0).max(5),
+}).strict().superRefine((value, context) => {
+  if (value.indiceCorrecto >= value.opciones.length) {
+    context.addIssue({ code: "custom", message: "Selecciona una opción correcta existente.", path: ["indiceCorrecto"] });
+  }
+  if (new Set(value.opciones.map((option) => option.toLowerCase())).size !== value.opciones.length) {
+    context.addIssue({ code: "custom", message: "Las opciones no pueden repetirse.", path: ["opciones"] });
+  }
+});
+export const questionQuery = z.object({
+  page: positiveId.default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+}).strict();
 export const orderBody = z.object({
   lecciones: z.array(positiveId).min(1).max(500)
     .refine((ids) => new Set(ids).size === ids.length, "No repitas lecciones."),

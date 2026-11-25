@@ -95,11 +95,15 @@ export function CourseEditorPage() {
         {course.lecciones.length === 0 ? <EmptyState title="Aquí comienza tu curso">Agrega tu primera lección de contenido.</EmptyState> :
           <ol className="editor-lessons">{course.lecciones.map((lesson, index) => <li key={lesson.id}>
             <span className="lesson-number">{index + 1}</span>
-            <div className="lesson-title-group"><strong>{lesson.titulo}</strong><small>{lesson.tipo === "contenido" ? "Texto y video" : "Cuestionario · Editor de preguntas pendiente"}</small></div>
+            <div className="lesson-title-group"><strong>{lesson.titulo}</strong><small>{lesson.tipo === "contenido" ?
+              "Texto y video" : `Cuestionario · Nota mínima: ${lesson.notaMinima}`}</small></div>
             <div className="lesson-actions">
               <button className="btn btn-sm btn-light" aria-label={`Subir ${lesson.titulo}`} disabled={busy || editingLesson !== null || index === 0} onClick={() => reorder(index, -1)}>↑</button>
               <button className="btn btn-sm btn-light" aria-label={`Bajar ${lesson.titulo}`} disabled={busy || editingLesson !== null || index === course.lecciones.length - 1} onClick={() => reorder(index, 1)}>↓</button>
-              {lesson.tipo === "contenido" && <button className="btn btn-sm btn-outline-secondary" disabled={busy || editingLesson !== null} onClick={() => setEditingLesson(lesson)}>Editar</button>}
+              <button className="btn btn-sm btn-outline-secondary" disabled={busy || editingLesson !== null} onClick={() => setEditingLesson(lesson)}>Editar</button>
+              {lesson.tipo === "cuestionario" && <button className="btn btn-sm btn-outline-primary"
+                disabled={busy || editingLesson !== null} aria-label={`Preguntas de ${lesson.titulo}`}
+                onClick={() => navigate(`/instructor/lecciones/${lesson.id}/preguntas`)}>Preguntas</button>}
               <button className="btn btn-sm btn-outline-danger" aria-label={`Eliminar ${lesson.titulo}`} disabled={busy || editingLesson !== null}
                 onClick={() => window.confirm(`¿Eliminar “${lesson.titulo}”?`) && run(() => CourseService.removeLesson(lesson.id), "Lección eliminada.")}>×</button>
             </div>

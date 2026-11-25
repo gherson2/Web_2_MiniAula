@@ -12,7 +12,18 @@ const course = object({
   titulo: string, descripcion: string, categoria: string,
   nivel: { type: "string", enum: ["basico", "intermedio", "avanzado"] },
 });
-const lesson = object({ titulo: string, contenido: string, videoUrl: string }, ["titulo"]);
+const lesson = object({
+  titulo: string,
+  tipo: { type: "string", enum: ["contenido", "cuestionario"], default: "contenido" },
+  contenido: string, videoUrl: string,
+  notaMinima: { type: "integer", minimum: 0, maximum: 100, default: 70 },
+}, ["titulo"]);
+const question = object({
+  enunciado: { type: "string", minLength: 1, maxLength: 2000 },
+  opciones: { type: "array", minItems: 2, maxItems: 6, uniqueItems: true,
+    items: { type: "string", minLength: 1, maxLength: 500 } },
+  indiceCorrecto: { type: "integer", minimum: 0, maximum: 5, writeOnly: true },
+});
 function operation(summary, { auth = false, params = [], schema, status = 200 } = {}) {
   return {
     summary, security: auth ? [{ bearerAuth: [] }] : [], parameters: params,
@@ -28,8 +39,8 @@ function operation(summary, { auth = false, params = [], schema, status = 200 } 
 
 export const openapi = {
   openapi: "3.0.3",
-  info: { title: "MiniAula — seguimiento de cursos", version: "0.5.2",
-    description: "Inscripción, lectura de contenido desbloqueado, guardado de completados y progreso por curso en Mis cursos. El resumen es privado y se calcula en servidor. Rendir/calificar cuestionarios y estadísticas del instructor siguen pendientes." },
+  info: { title: "MiniAula — editor de cuestionarios", version: "0.6.0",
+    description: "Incluye cursos, lecciones, progreso y preparación de cuestionarios con nota mínima y CRUD de preguntas. Las claves nunca se devuelven por HTTP, tampoco al instructor: al editar debe seleccionar nuevamente la respuesta correcta. El tipo de una lección guardada es inmutable y el contenido/preguntas de cursos inscritos no se modifican. Rendir/calificar cuestionarios y estadísticas siguen pendientes." },
   servers: [{ url: "/api" }],
   components: {
     securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" } },
@@ -73,7 +84,7 @@ export const openapi = {
     "/cursos/{id}/estado": { patch: operation("Publicar (mínimo una lección) o archivar", {
       auth: true, params: [id], schema: object({ estado: { type: "string", enum: ["publicado", "archivado"] } }),
     }) },
-    "/cursos/{id}/lecciones": { post: operation("Crear lección de contenido en curso propio", {
+    "/cursos/{id}/lecciones": { post: operation("Crear contenido o cuestionario con nota mínima en curso propio", {
       auth: true, params: [id], schema: lesson, status: 201,
     }) },
     "/cursos/{id}/lecciones/orden": { patch: operation("Ordenar: enviar TODOS los IDs en el orden deseado", {
@@ -83,7 +94,7 @@ export const openapi = {
       get: operation("Leer lección (estudiante inscrito). 403 si bloqueada; nunca revela claves de preguntas.", {
         auth: true, params: [id],
       }),
-      put: operation("Editar lección de contenido propia", { auth: true, params: [id], schema: lesson }),
+      put: operation("Editar contenido o título/nota mínima de cuestionario propio, sin cambiar su tipo", { auth: true, params: [id], schema: lesson }),
       delete: operation("Eliminar lección propia (no la última de un curso publicado)", { auth: true, params: [id], status: 204 }),
     },
     "/cursos/{id}/inscripcion": {
@@ -107,6 +118,23 @@ export const openapi = {
     "/lecciones/{id}/completar": {
       post: operation("Completar contenido desbloqueado y recibir progreso actualizado. Sin cuerpo; repetible sin duplicar. 403 bloqueada, 409 cuestionario.", {
         auth: true, params: [id],
+      }),
+    },
+    "/lecciones/{id}/preguntas": {
+      get: operation("Preguntas de mi cuestionario, sin clave correcta; incluye metadatos y paginación", {
+        auth: true, params: [id, ...query.filter((item) => ["page", "limit"].includes(item.name))
+          .map((item) => item.name === "limit" ? { ...item, schema: { ...item.schema, default: 10 } } : item)],
+      }),
+      post: operation("Crear pregunta en cuestionario propio (máximo 100). Solo retorna campos sin clave", {
+        auth: true, params: [id], schema: question, status: 201,
+      }),
+    },
+    "/preguntas/{id}": {
+      put: operation("Editar pregunta propia; volver a proporcionar la clave correcta", {
+        auth: true, params: [id], schema: question,
+      }),
+      delete: operation("Eliminar pregunta propia sin inscritos en el curso", {
+        auth: true, params: [id], status: 204,
       }),
     },
   },
