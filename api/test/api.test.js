@@ -653,3 +653,168 @@ test("resumen: maneja cursos vacíos y redondea sin dividir por cero", () => {
     { leccionId: 1, completada: true }, { leccionId: 2, completada: true },
   ]).porcentaje, 67);
 });
+
+let quizCourse;
+let authoringQuiz;
+let authoringQuestion;
+const quizData = { titulo: "Evaluación del curso", tipo: "cuestionario", notaMinima: 75 };
+const questionData = {
+  enunciado: "¿Qué método crea un recurso?", opciones: ["GET", "POST", "DELETE"], indiceCorrecto: 1,
+};
+function assertNoAnswer(value) {
+  assert.equal(JSON.stringify(value).includes('"indiceCorrecto":'), false);
+}
+
+test("cuestionarios: crear y editar título/nota mínima, validando el tipo y la escala", async () => {
+  const course = await api.post("/api/cursos").set(auth(accounts.teacher)).send(courseData).expect(201);
+  quizCourse = course.body.id;
+  const path = `/api/cursos/${quizCourse}/lecciones`;
+  for (const notaMinima of [-1, 101, 70.5, "70"]) {
+    await api.post(path).set(auth(accounts.teacher)).send({ ...quizData, notaMinima }).expect(422);
+  }
+  await api.post(path).set(auth(accounts.teacher))
+    .send({ ...quizData, contenido: "No corresponde a un cuestionario" }).expect(422);
+  const created = await api.post(path).set(auth(accounts.teacher)).send(quizData).expect(201);
+  authoringQuiz = created.body.id;
+  assert.equal(created.body.tipo, "cuestionario");
+  assert.equal(created.body.notaMinima, 75);
+  assert.equal(created.body.contenido, null);
+  assert.equal(created.body.videoUrl, null);
+  const updated = await api.put(`/api/lecciones/${authoringQuiz}`).set(auth(accounts.teacher))
+    .send({ ...quizData, titulo: "Evaluación editada", notaMinima: 80 }).expect(200);
+  assert.equal(updated.body.notaMinima, 80);
+  await api.put(`/api/lecciones/${authoringQuiz}`).set(auth(accounts.teacher))
+    .send({ titulo: "Cambio de tipo", tipo: "contenido", contenido: "Texto" }).expect(409);
+  await api.put(`/api/lecciones/${authoringQuiz}`).set(auth(accounts.other)).send(quizData).expect(403);
+});
+
+test("preguntas: crear guarda la clave solo en BD y nunca la retorna", async () => {
+  const response = await api.post(`/api/lecciones/${authoringQuiz}/preguntas`)
+    .set(auth(accounts.teacher)).send(questionData).expect(201);
+  authoringQuestion = response.body.id;
+  assert.deepEqual(Object.keys(response.body).sort(), ["enunciado", "id", "leccionId", "opciones"]);
+  assertNoAnswer(response.body);
+  const stored = await Pregunta.unscoped().findByPk(authoringQuestion);
+  assert.equal(stored.indiceCorrecto, 1);
+  assert.deepEqual(stored.opciones, questionData.opciones);
+});
+
+test("preguntas: valida opciones, clave, enunciado, parámetros y query antes de escribir", async () => {
+  const path = `/api/lecciones/${authoringQuiz}/preguntas`;
+  const invalid = [
+    { opciones: ["Solo una"] }, { opciones: Array.from({ length: 7 }, (_, index) => `Opción ${index}`) },
+    { opciones: ["GET", " get "] }, { opciones: ["GET", ""] },
+    { indiceCorrecto: -1 }, { indiceCorrecto: 3 }, { indiceCorrecto: 0.5 }, { indiceCorrecto: "1" },
+    { enunciado: "" }, { enunciado: "x".repeat(2001) }, { leccionId: 1 }, { id: 999 },
+  ];
+  for (const change of invalid) {
+    await api.post(path).set(auth(accounts.teacher)).send({ ...questionData, ...change }).expect(422);
+  }
+  for (const query of ["page=0", "limit=51", "indiceCorrecto=1", "extra=1"]) {
+    await api.get(`${path}?${query}`).set(auth(accounts.teacher)).expect(422);
+  }
+  await api.get("/api/lecciones/error/preguntas").set(auth(accounts.teacher)).expect(422);
+  await api.get("/api/lecciones/2147483647/preguntas").set(auth(accounts.teacher)).expect(404);
+  await api.put("/api/preguntas/2147483647").set(auth(accounts.teacher)).send(questionData).expect(404);
+  await api.delete("/api/preguntas/2147483647").set(auth(accounts.teacher)).expect(404);
+  assert.equal(await Pregunta.count({ where: { leccionId: authoringQuiz } }), 1);
+});
+
+test("preguntas: listado paginado con nota mínima y sin respuestas correctas", async () => {
+  await api.post(`/api/lecciones/${authoringQuiz}/preguntas`).set(auth(accounts.teacher))
+    .send({ ...questionData, enunciado: "Segunda pregunta" }).expect(201);
+  const first = await api.get(`/api/lecciones/${authoringQuiz}/preguntas?page=1&limit=1`)
+    .set(auth(accounts.teacher)).expect(200);
+  const second = await api.get(`/api/lecciones/${authoringQuiz}/preguntas?page=2&limit=1`)
+    .set(auth(accounts.teacher)).expect(200);
+  assert.equal(first.body.pagination.total, 2);
+  assert.equal(first.body.pagination.pages, 2);
+  assert.equal(first.body.leccion.notaMinima, 80);
+  assert.equal(first.body.leccion.cursoId, quizCourse);
+  assert.notEqual(first.body.data[0].id, second.body.data[0].id);
+  assertNoAnswer(first.body);
+  assertNoAnswer(second.body);
+});
+
+test("preguntas: editar exige volver a indicar la respuesta y la guarda sin devolverla", async () => {
+  const updated = { enunciado: "¿Qué significa crear?", opciones: ["POST", "GET"], indiceCorrecto: 0 };
+  const response = await api.put(`/api/preguntas/${authoringQuestion}`).set(auth(accounts.teacher))
+    .send(updated).expect(200);
+  assert.equal(response.body.enunciado, updated.enunciado);
+  assertNoAnswer(response.body);
+  assert.equal((await Pregunta.unscoped().findByPk(authoringQuestion)).indiceCorrecto, 0);
+  await api.put(`/api/preguntas/${authoringQuestion}`).set(auth(accounts.teacher))
+    .send({ enunciado: "Sin clave", opciones: ["A", "B"] }).expect(422);
+});
+
+test("preguntas: autenticación, rol y propiedad se validan en todas las operaciones", async () => {
+  const listPath = `/api/lecciones/${authoringQuiz}/preguntas`;
+  for (const credentials of [null, accounts.student, accounts.other]) {
+    const status = credentials ? 403 : 401;
+    let list = api.get(listPath);
+    let create = api.post(listPath).send(questionData);
+    let update = api.put(`/api/preguntas/${authoringQuestion}`).send(questionData);
+    let remove = api.delete(`/api/preguntas/${authoringQuestion}`);
+    if (credentials) {
+      const headers = auth(credentials);
+      list = list.set(headers); create = create.set(headers);
+      update = update.set(headers); remove = remove.set(headers);
+    }
+    await list.expect(status); await create.expect(status);
+    await update.expect(status); await remove.expect(status);
+  }
+});
+
+test("preguntas: una lección de contenido no puede recibir preguntas", async () => {
+  const lesson = await api.post(`/api/cursos/${quizCourse}/lecciones`).set(auth(accounts.teacher))
+    .send({ titulo: "Solo contenido", contenido: "Material de estudio" }).expect(201);
+  await api.get(`/api/lecciones/${lesson.body.id}/preguntas`).set(auth(accounts.teacher)).expect(409);
+  await api.post(`/api/lecciones/${lesson.body.id}/preguntas`).set(auth(accounts.teacher))
+    .send(questionData).expect(409);
+});
+
+test("preguntas: eliminar una pregunta y eliminar una lección limpian solo sus recursos", async () => {
+  await api.delete(`/api/preguntas/${authoringQuestion}`).set(auth(accounts.teacher)).expect(204);
+  assert.equal(await Pregunta.findByPk(authoringQuestion), null);
+  const lesson = await api.post(`/api/cursos/${quizCourse}/lecciones`).set(auth(accounts.teacher))
+    .send({ ...quizData, titulo: "Temporal para eliminar" }).expect(201);
+  await api.post(`/api/lecciones/${lesson.body.id}/preguntas`).set(auth(accounts.teacher))
+    .send(questionData).expect(201);
+  await api.delete(`/api/lecciones/${lesson.body.id}`).set(auth(accounts.teacher)).expect(204);
+  assert.equal(await Pregunta.count({ where: { leccionId: lesson.body.id } }), 0);
+  assert.equal(await Pregunta.count({ where: { leccionId: authoringQuiz } }), 1);
+});
+
+test("preguntas: un curso inscrito conserva preguntas y nota; claves tampoco salen al estudiante", async () => {
+  await api.patch(`/api/cursos/${quizCourse}/estado`).set(auth(accounts.teacher)).send({ estado: "publicado" }).expect(200);
+  await api.post(`/api/cursos/${quizCourse}/inscripcion`).set(auth(accounts.student)).expect(201);
+  const listPath = `/api/lecciones/${authoringQuiz}/preguntas`;
+  const listed = await api.get(listPath).set(auth(accounts.teacher)).expect(200);
+  const id = listed.body.data[0].id;
+  await api.post(listPath).set(auth(accounts.teacher)).send(questionData).expect(409);
+  await api.put(`/api/preguntas/${id}`).set(auth(accounts.teacher)).send(questionData).expect(409);
+  await api.delete(`/api/preguntas/${id}`).set(auth(accounts.teacher)).expect(409);
+  await api.put(`/api/lecciones/${authoringQuiz}`).set(auth(accounts.teacher))
+    .send({ ...quizData, notaMinima: 20 }).expect(409);
+  const privateList = await api.get(listPath).set(auth(accounts.teacher)).expect(200);
+  assert.equal(privateList.body.leccion.notaMinima, 80);
+  assertNoAnswer(privateList.body);
+  const lesson = await api.get(`/api/lecciones/${authoringQuiz}`).set(auth(accounts.student)).expect(200);
+  assertNoAnswer(lesson.body);
+  assert.equal(lesson.body.preguntas, undefined);
+  const detail = await api.get(`/api/cursos/${quizCourse}`).expect(200);
+  assertNoAnswer(detail.body);
+});
+
+test("preguntas: el máximo se comprueba bajo bloqueo del curso", async () => {
+  const course = await api.post("/api/cursos").set(auth(accounts.teacher)).send(courseData).expect(201);
+  const lesson = await api.post(`/api/cursos/${course.body.id}/lecciones`).set(auth(accounts.teacher))
+    .send(quizData).expect(201);
+  await Pregunta.bulkCreate(Array.from({ length: 100 }, (_, index) => ({
+    ...questionData, enunciado: `Pregunta ${index + 1}`, leccionId: lesson.body.id,
+  })));
+  const response = await api.post(`/api/lecciones/${lesson.body.id}/preguntas`).set(auth(accounts.teacher))
+    .send(questionData).expect(409);
+  assert.equal(response.body.error.code, "QUESTION_LIMIT");
+  assert.equal(await Pregunta.count({ where: { leccionId: lesson.body.id } }), 100);
+});

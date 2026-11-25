@@ -7,7 +7,10 @@ export function createLesson(courseId, data) {
     await ensureNoEnrollments(courseId, transaction);
     const max = await Leccion.max("orden", { where: { cursoId: courseId }, transaction });
     return Leccion.create({
-      ...data, tipo: "contenido", cursoId: courseId, orden: (max || 0) + 1,
+      ...data,
+      contenido: data.tipo === "cuestionario" ? null : data.contenido,
+      videoUrl: data.tipo === "cuestionario" ? null : data.videoUrl,
+      cursoId: courseId, orden: (max || 0) + 1,
     }, { transaction });
   });
 }
@@ -15,10 +18,16 @@ export function createLesson(courseId, data) {
 export function updateLesson(lesson, data) {
   return withCourseLock(lesson.cursoId, async (course, transaction) => {
     await ensureNoEnrollments(course.id, transaction);
-    if (lesson.tipo !== "contenido") {
-      throw new AppError(409, "QUIZ_NOT_EDITABLE", "El editor de cuestionarios corresponde a la siguiente etapa.");
+    const current = await Leccion.findByPk(lesson.id, { transaction });
+    if (!current) throw new AppError(404, "NOT_FOUND", "La lección no existe.");
+    if (current.tipo !== data.tipo) {
+      throw new AppError(409, "LESSON_TYPE_IMMUTABLE", "No puedes cambiar el tipo de una lección existente. Crea una nueva.");
     }
-    return lesson.update(data, { transaction });
+    return current.update({
+      ...data,
+      contenido: data.tipo === "cuestionario" ? null : data.contenido,
+      videoUrl: data.tipo === "cuestionario" ? null : data.videoUrl,
+    }, { transaction });
   });
 }
 

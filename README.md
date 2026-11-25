@@ -17,6 +17,8 @@ Como instructor: crear/editar cursos, publicar/archivar/eliminar los propios.
 
 Crear/editar/eliminar lecciones de texto y video, y cambiar su orden con flechas.
 
+Crear cuestionarios, definir su nota mínima y gestionar preguntas de opción múltiple propias.
+
 Como estudiante: inscribirte en cursos publicados y consultar tus cursos inscritos.
 
 La API impide inscripciones duplicadas (409), incluso ante solicitudes simultáneas.
@@ -48,7 +50,17 @@ El progreso se consulta con GET /api/cursos/:id/progreso y se guarda al completa
 contenido con POST /api/lecciones/:id/completar. La API calcula el resumen:
 
 no acepta que el cliente indique el porcentaje, la inscripción o la nota.
-Los cuestionarios todavía no muestran preguntas ni reciben intentos; ese endpoint no permite completarlos.
+El instructor ya puede preparar las preguntas; el estudiante todavía no puede
+verlas ni enviar intentos. El endpoint de completar contenido no aprueba cuestionarios.
+
+Editor del instructor: al crear una lección elige Contenido o Cuestionario.
+Para un cuestionario indica una nota mínima entera entre 0 y 100. Después de guardarlo,
+usa el botón Preguntas del temario para agregar, editar o eliminar preguntas.
+Cada pregunta tiene entre 2 y 6 opciones diferentes y una respuesta correcta.
+El cuestionario admite hasta 100 preguntas y su listado está paginado.
+La API nunca devuelve la clave guardada, ni al instructor: al editar debe seleccionarla
+nuevamente. Los cursos con inscritos conservan preguntas y nota mínima sin cambios.
+El tipo de una lección guardada no se cambia; crea otra si necesitas un tipo diferente.
 
 Mis cursos usa el mismo cálculo del aula. Su respuesta incluye completadas, total,
 porcentaje y completado de cada inscripción del usuario autenticado. Los cursos
@@ -314,14 +326,17 @@ Las pruebas de API usan pg-mem, aislado de tu PostgreSQL: verifican migración,
 
 seed, autenticación, filtros, permisos, privacidad, contenido e inscripciones.
 
-En memoria se aprueban 42 pruebas y se omiten dos de concurrencia. El frontend tiene
+En memoria se aprueban 52 pruebas y se omiten dos de concurrencia. El frontend tiene
 
-39 pruebas aprobadas. El recorrido de navegador incluye contenido desbloqueado,
+51 pruebas aprobadas. El recorrido de navegador incluye contenido desbloqueado,
 
 bloqueo 403, guardar completados, desbloquear, recargar, no duplicar y terminar un curso de contenido, a 375px.
 
 También se verifica el progreso de Mis cursos al empezar, continuar y repasar,
 su coherencia con el aula, privacidad, cursos archivados y consultas por página.
+
+El recorrido de cuestionarios verifica creación, nota mínima, CRUD de preguntas,
+persistencia al recargar y claves ausentes en respuestas HTTP, también a 375px.
 
 Ese adaptador no prueba el bloqueo ni las garantías de rollback de PostgreSQL real.
 
@@ -452,7 +467,7 @@ con revisión del compañero. Este avance no crea commits, PRs ni contribuciones
 
 Pendiente para la entrega:
 
-RF-14 a RF-16: editor de preguntas, intentos y calificación en servidor y panel del instructor.
+RF-15 y RF-16: rendir, intentos y calificación en servidor y panel del instructor.
 
 Completar la documentación con esos endpoints y las pruebas de RN-01 a RN-08.
 

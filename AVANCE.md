@@ -1,6 +1,6 @@
-# Estado de MiniAula — progreso del estudiante
+# Estado de MiniAula — editor de cuestionarios
 
-Los cuestionarios y el panel concentran una parte importante del trabajo restante.
+Rendir/calificar cuestionarios y el panel concentran el trabajo funcional restante.
 “Implementado” no reemplaza la comprobación del docente ni la prueba de Docker.
 
 ## Funcionalidades incorporadas
@@ -17,6 +17,13 @@ Los cambios se hicieron en el proyecto original, no en `Downloads/26`.
 continuar o repasar. El resumen es privado y usa la misma regla de cálculo del aula.
 Se consultan lecciones y progresos por página, sin agregar consultas por cada curso,
 y no se devuelven contenidos, claves ni notas.
+
+El instructor puede crear lecciones de cuestionario, definir su nota mínima y
+agregar, editar o eliminar preguntas de opción múltiple. El tipo de una lección
+ya guardada no cambia. La lista de preguntas es privada y paginada.
+Las respuestas correctas solo se guardan en BD: ni crear, editar ni listar las
+devuelve. Al editar hay que seleccionar nuevamente la respuesta correcta.
+Las preguntas y la nota mínima de cursos con inscritos no se modifican.
 
 ## Funcionalidades
 
@@ -35,7 +42,7 @@ y no se devuelven contenidos, claves ni notas.
 | RF-11 | Implementado | Inscribirse desde el detalle, solo estudiante y curso publicado |
 | RF-12 | Implementado | Completar contenido desbloqueado y persistir progreso propio |
 | RF-13 | Implementado | Lista privada y paginada, porcentaje real, barra y empezar/continuar/repasar |
-| RF-14 | Pendiente | Editor de preguntas y nota mínima |
+| RF-14 | Implementado | Cuestionarios, nota mínima y CRUD de preguntas propias con validación |
 | RF-15 | Pendiente | Rendir, calificar, aprobar y limitar intentos |
 | RF-16 | Pendiente | Resumen de inscritos, promedios y punto de detención |
 
@@ -44,12 +51,12 @@ y no se devuelven contenidos, claves ni notas.
 | Código | Estado |
 |---|---|
 | RN-01 | Bloqueo y completado de contenido implementados en servidor; falta flujo de aprobación de cuestionarios |
-| RN-02 | Parcial: endpoints públicos no exponen respuestas; falta calificación |
+| RN-02 | Claves no se devuelven por HTTP, tampoco al instructor; falta calificación |
 | RN-03 | Pendiente: límite de 3 intentos y mejor nota (campos y CHECK preparados) |
 | RN-04 | Implementado: inscripción única, error 409 y bloqueo de concurrencia en PostgreSQL |
 | RN-05 | Implementado: catálogo publicado y publicación con mínimo una lección |
 | RN-06 | Implementado y probado con inscripción desde API: curso con inscritos no se elimina |
-| RN-07 | Implementado en cursos y lecciones; preguntas pendientes |
+| RN-07 | Implementado en cursos, lecciones y preguntas mediante middleware de propiedad |
 | RN-08 | Inscripciones y consulta de progreso privadas; envío de cuestionarios y notas todavía pendiente |
 
 ## Base técnica
@@ -63,20 +70,19 @@ y no se devuelven contenidos, claves ni notas.
 - React + Vite + Bootstrap, rutas protegidas, Context, Axios, useAuth/useResource.
 - Formularios con validación y feedback, estados de carga/error/vacío.
 - Dockerfiles y Compose con 3 servicios y volumen. El despliegue anterior fue
-   verificado; las actualizaciones de progreso están pendientes de probar en Docker.
+   verificado; las actualizaciones posteriores, incluido el editor, están pendientes de probar en Docker.
 
 ## Siguiente bloque recomendado
 
-1. Editor de preguntas y nota mínima, sin filtrar respuestas al estudiante.
-2. Calificación, máximo 3 intentos y guardar la mejor nota.
-3. Panel del instructor.
-4. Repetir pruebas con PostgreSQL real y Docker; documentación, video y defensa.
+1. Rendir/calificar, máximo 3 intentos y guardar la mejor nota.
+2. Panel del instructor.
+3. Repetir pruebas con PostgreSQL real y Docker; documentación, video y defensa.
 
 ## Verificación de esta etapa
 
-- 42 pruebas de API aprobadas con base de datos aislada en memoria; dos pruebas
+- 52 pruebas de API aprobadas con base de datos aislada en memoria; dos pruebas
   de concurrencia se omiten porque necesitan PostgreSQL real.
-- 39 pruebas de frontend aprobadas.
+- 51 pruebas de frontend aprobadas.
 - Recorrido en Edge aprobado: inscripción → Mis cursos → Abrir aula → leer primera
   lección → comprobar siguiente bloqueada → recibir 403 por API y URL directa →
   completar → continuar → recargar y conservar progreso → terminar un curso de contenido.
@@ -84,14 +90,19 @@ y no se devuelven contenidos, claves ni notas.
   recarga persistente, continuar donde corresponde y repasar sin modificar completados.
 - Probada privacidad entre estudiantes, coherencia con el aula, cursos archivados,
   redondeo, curso vacío y número constante de consultas al ampliar la página.
+- Editor probado en Edge: crear cuestionario y nota mínima, crear pregunta,
+  recargar, editar opciones/clave, eliminar y volver a crear, actualizar nota
+  mínima y bloquear la ruta al estudiante. Sin desbordamiento a 375px.
+- Comprobado en API: clave no devuelta en POST/PUT/GET, propiedad, rol,
+  validación de opciones, paginación y bloqueo de cambios con inscritos.
 - Temario y contenido comprobados a 375px sin desbordamiento horizontal.
 - Compilación de producción de Vite aprobada.
 - Se comprobaron permisos, rechazo de contenido bloqueado, persistencia, repetición
   idempotente, curso completado y prohibición de completar cuestionarios como contenido.
 - Los casos de notas reprobadas/aprobadas siguen usando fixtures: rendir y calificar
   cuestionarios aún no están implementados.
-- Docker estaba apagado al implementar el guardado de progreso. **Pendiente**:
-  reconstruir contenedores y repetir las 44 pruebas con PostgreSQL real.
+- Docker estaba apagado al implementar este editor. **Pendiente**:
+  reconstruir contenedores y repetir las 54 pruebas con PostgreSQL real.
 - No se modificaron `.env`, volúmenes ni datos locales.
 
 ## Evidencia de la versión anterior con inscripciones (no sustituye la nueva comprobación)

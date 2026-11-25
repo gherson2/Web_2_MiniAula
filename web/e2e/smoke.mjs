@@ -4,6 +4,7 @@ import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
 import { createServer } from "vite";
+import { exerciseQuizAuthoring } from "./quiz-authoring.mjs";
 
 process.env.NODE_ENV = "test";
 process.env.DB_TEST_MEMORY = "true";
@@ -90,6 +91,7 @@ try {
   await page.getByRole("button", { name: "Salir", exact: true }).waitFor();
   await page.goto(editorUrl);
   await page.getByRole("heading", { name: "Información del curso" }).waitFor();
+  const questionEditorUrl = await exerciseQuizAuthoring(page, base, results);
   await page.getByRole("button", { name: "Salir", exact: true }).click();
   await page.waitForURL("**/login");
   await page.goto(`${base}/registro`);
@@ -168,9 +170,11 @@ try {
   assert.equal(await page.getByRole("button", { name: "Inscribirme en este curso" }).count(), 0);
   await page.goto(`${base}/instructor/cursos`);
   await page.getByRole("heading", { name: "Esta sección es para instructores" }).waitFor();
+  await page.goto(questionEditorUrl);
+  await page.getByRole("heading", { name: "Esta sección es para instructores" }).waitFor();
   await checkWidth(page);
   assert.deepEqual(errors, [], "No debe haber excepciones de JavaScript en el navegador.");
-  console.log("E2E correcto: inscripción, aula, bloqueo, completados persistentes, progreso en Mis cursos, empezar, continuar, repasar y privacidad; móvil 375px sin desbordamiento.");
+  console.log("E2E correcto: cursos, cuestionarios, nota mínima, CRUD de preguntas sin revelar claves, permisos, inscripción, completados, Mis cursos y repaso; móvil 375px sin desbordamiento.");
   console.log("Capturas guardadas en web/test-results/.");
 } finally {
   await browser?.close();

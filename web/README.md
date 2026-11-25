@@ -7,6 +7,11 @@ desbloqueado y temario bloqueado. Permite completar contenido, guardar el progre
 ver la barra del aula y continuar a la siguiente lección. Mis cursos muestra el
 progreso real por tarjeta y permite empezar, continuar o repasar. Rendir sigue pendiente.
 
+El instructor puede crear cuestionarios con nota mínima y acceder a su editor de
+preguntas desde el temario. Incluye opciones, selección de clave, creación, edición,
+eliminación y paginación. La clave guardada no se recibe de la API: al editar hay
+que seleccionarla otra vez. Rendir/calificar y el panel siguen pendientes.
+
 Consulta el [README principal](../README.md) para Docker, cuentas y alcance.
 
 ## Desarrollo

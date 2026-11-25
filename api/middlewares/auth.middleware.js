@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { Usuario, Curso, Leccion } from "../models/index.js";
+import { Usuario, Curso, Leccion, Pregunta } from "../models/index.js";
 import { AppError } from "../utils/AppError.js";
 
 export async function authenticate(req, res, next) {
@@ -44,6 +44,18 @@ export async function ownLesson(req, res, next) {
   if (lesson.curso.instructorId !== req.user.id) {
     throw new AppError(403, "NOT_OWNER", "Solo puedes modificar tus propias lecciones.");
   }
+  req.lesson = lesson;
+  next();
+}
+
+export async function ownQuestion(req, res, next) {
+  const question = await Pregunta.findByPk(req.validated.params.id, { attributes: ["id", "leccionId"] });
+  if (!question) throw new AppError(404, "NOT_FOUND", "La pregunta no existe.");
+  const lesson = await Leccion.findByPk(question.leccionId, { include: [{ model: Curso, as: "curso" }] });
+  if (!lesson || lesson.curso.instructorId !== req.user.id) {
+    throw new AppError(403, "NOT_OWNER", "Solo puedes modificar preguntas de tus propios cursos.");
+  }
+  req.question = question;
   req.lesson = lesson;
   next();
 }
