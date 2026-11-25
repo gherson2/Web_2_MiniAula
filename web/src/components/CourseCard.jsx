@@ -24,6 +24,8 @@ export function CourseCard({ course, editable = false }) {
         <span className="level-label">{levelLabels[course.nivel] || course.nivel}</span>
         <Link className="course-link" to={editable ? `/instructor/cursos/${course.id}/editar` : `/cursos/${course.id}`}>{editable ? "Editar curso" : "Ver curso"} <span aria-hidden="true">↗</span></Link>
       </div>
+      {editable && <Link className="btn btn-outline-primary btn-sm mt-3"
+        to={`/instructor/cursos/${course.id}/resumen`}>Ver estadísticas</Link>}
     </div>
   </article>;
 }

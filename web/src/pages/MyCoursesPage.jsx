@@ -17,7 +17,7 @@ export function MyCoursesPage() {
     <p className="text-secondary">Tus cursos inscritos y el avance que ya guardaste.</p>
     <div className="stage-notice mb-4">Abre el aula para leer las lecciones desbloqueadas de tus cursos.
       El progreso de esta lista se calcula en el servidor a partir de tus lecciones completadas.
-      Rendir cuestionarios sigue pendiente.</div>
+      Completa el contenido y aprueba los cuestionarios para seguir avanzando.</div>
     {resource.loading ? <Loading /> : resource.error ? <ErrorAlert message={resource.error} retry={resource.reload} /> :
       resource.data.data.length === 0 ? <EmptyState title="Todavía no te inscribiste en un curso">
         <Link to="/cursos">Explorar el catálogo</Link>

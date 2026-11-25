@@ -321,6 +321,7 @@ test("PostgreSQL real serializa inscripciones simultáneas y solo crea una", {
   skip: process.env.API_TEST_POSTGRES !== "true" && "Requiere bloqueo de filas de PostgreSQL real.",
 }, async () => {
   const course = await Curso.create({ ...courseData, estado: "publicado", instructorId: accounts.teacher.usuario.id });
+  await Leccion.create({ titulo: "Contenido", tipo: "contenido", contenido: "Texto", orden: 1, cursoId: course.id });
   const results = await Promise.all(Array.from({ length: 8 }, () =>
     api.post(`/api/cursos/${course.id}/inscripcion`).set(auth(accounts.student))));
   assert.equal(results.filter((result) => result.status === 201).length, 1);
@@ -403,7 +404,7 @@ test("aula: interpreta progreso propio guardado sin compartirlo con otro estudia
   assert.equal(await Progreso.count({ where: { inscripcionId: enrollment.id, leccionId: first.id } }), 1);
 });
 
-test("aula: un cuestionario anterior requiere aprobación; sus preguntas y claves siguen ocultas", async () => {
+test("aula: un cuestionario anterior requiere aprobación; preguntas sin claves", async () => {
   const lessons = await learningLessons();
   const enrollment = await learningEnrollment();
   for (const lesson of lessons.slice(1, 3)) {
@@ -414,7 +415,9 @@ test("aula: un cuestionario anterior requiere aprobación; sus preguntas y clave
     inscripcionId: enrollment.id, leccionId: quiz.id, completada: true, mejorNota: quiz.notaMinima - 1,
   });
   const quizResponse = await api.get(`/api/lecciones/${quiz.id}`).set(auth(accounts.student)).expect(200);
-  for (const field of ["preguntas", "indiceCorrecto", "contenido", "videoUrl"]) {
+  assert.ok(quizResponse.body.preguntas.length > 0);
+  assertNoAnswer(quizResponse.body);
+  for (const field of ["indiceCorrecto", "contenido", "videoUrl"]) {
     assert.equal(quizResponse.body[field], undefined);
   }
   await api.get(`/api/lecciones/${lessons[4].id}`).set(auth(accounts.student)).expect(403);
@@ -520,6 +523,7 @@ test("completar: no permite completar cuestionarios ni desbloquearlos como si fu
   const quiz = await Leccion.create({
     titulo: "Cuestionario obligatorio", tipo: "cuestionario", orden: 1, cursoId: course.id,
   });
+  await Pregunta.create({ leccionId: quiz.id, enunciado: "Pregunta", opciones: ["A", "B"], indiceCorrecto: 0 });
   const next = await Leccion.create({
     titulo: "Después del cuestionario", tipo: "contenido", contenido: "Texto", orden: 2, cursoId: course.id,
   });
@@ -611,9 +615,10 @@ test("mis cursos: un cuestionario no aprobado no se cuenta como completado", asy
   const quiz = await Leccion.create({
     titulo: "Evaluación", tipo: "cuestionario", orden: 1, notaMinima: 70, cursoId: course.id,
   });
+  await Pregunta.create({ leccionId: quiz.id, enunciado: "Pregunta", opciones: ["A", "B"], indiceCorrecto: 0 });
   await api.patch(`/api/cursos/${course.id}/estado`).set(auth(accounts.teacher)).send({ estado: "publicado" }).expect(200);
   const enrollment = await api.post(`/api/cursos/${course.id}/inscripcion`).set(auth(accounts.student)).expect(201);
-  // Fixture de nota: rendir/calificar cuestionarios aún no está implementado.
+  // Fixture deliberadamente inconsistente para comprobar la regla compartida.
   const saved = await Progreso.create({
     inscripcionId: enrollment.body.id, leccionId: quiz.id, completada: true, mejorNota: 69,
   });
@@ -801,7 +806,7 @@ test("preguntas: un curso inscrito conserva preguntas y nota; claves tampoco sal
   assertNoAnswer(privateList.body);
   const lesson = await api.get(`/api/lecciones/${authoringQuiz}`).set(auth(accounts.student)).expect(200);
   assertNoAnswer(lesson.body);
-  assert.equal(lesson.body.preguntas, undefined);
+  assert.ok(lesson.body.preguntas.length > 0);
   const detail = await api.get(`/api/cursos/${quizCourse}`).expect(200);
   assertNoAnswer(detail.body);
 });
@@ -817,4 +822,169 @@ test("preguntas: el máximo se comprueba bajo bloqueo del curso", async () => {
     .send(questionData).expect(409);
   assert.equal(response.body.error.code, "QUESTION_LIMIT");
   assert.equal(await Pregunta.count({ where: { leccionId: lesson.body.id } }), 100);
+});
+
+async function attemptFixture({ threshold = 70, count = 2, prefix = false } = {}) {
+  const course = await Curso.create({ ...courseData, instructorId: accounts.teacher.usuario.id, estado: "publicado" });
+  const first = prefix ? await Leccion.create({
+    titulo: "Antes", tipo: "contenido", contenido: "Texto", orden: 1, cursoId: course.id,
+  }) : null;
+  const quiz = await Leccion.create({
+    titulo: "Evaluación", tipo: "cuestionario", notaMinima: threshold, orden: prefix ? 2 : 1, cursoId: course.id,
+  });
+  const last = await Leccion.create({
+    titulo: "Después", tipo: "contenido", contenido: "Final", orden: prefix ? 3 : 2, cursoId: course.id,
+  });
+  const questions = await Pregunta.bulkCreate(Array.from({ length: count }, (_, index) => ({
+    leccionId: quiz.id, enunciado: `Pregunta ${index}`, opciones: ["A", "B"], indiceCorrecto: 0,
+  })));
+  const enrollment = await Inscripcion.create({ cursoId: course.id, estudianteId: accounts.student.usuario.id });
+  const answers = (choice = 0) => ({ respuestas: questions.map((question) => ({ preguntaId: question.id, indiceElegido: choice })) });
+  const submit = (data = answers()) => api.post(`/api/lecciones/${quiz.id}/intentos`).set(auth(accounts.student)).send(data);
+  return { course, first, quiz, last, questions, enrollment, answers, submit };
+}
+
+test("intentos: preguntas seguras, reprobar mantiene bloqueo, aprobar desbloquea y persiste mejor nota", async () => {
+  const f = await attemptFixture();
+  const read = await api.get(`/api/lecciones/${f.quiz.id}`).set(auth(accounts.student)).expect(200);
+  assert.deepEqual(Object.keys(read.body.preguntas[0]).sort(), ["enunciado", "id", "opciones"]);
+  assert.equal(read.body.progreso.mejorNota, null);
+  const failed = await f.submit(f.answers(1)).expect(200);
+  assert.equal(failed.body.nota, 0);
+  assert.equal(failed.body.aprobado, false);
+  assert.equal(failed.body.intentos, 1);
+  await api.get(`/api/lecciones/${f.last.id}`).set(auth(accounts.student)).expect(403);
+  const passed = await f.submit().expect(200);
+  assert.equal(passed.body.nota, 100);
+  assert.equal(passed.body.aprobado, true);
+  assert.equal(passed.body.progreso.porcentaje, 50);
+  await api.get(`/api/lecciones/${f.last.id}`).set(auth(accounts.student)).expect(200);
+  const lower = await f.submit(f.answers(1)).expect(200);
+  assert.equal(lower.body.mejorNota, 100);
+  assert.equal(lower.body.progreso.lecciones[0].completada, true);
+  assert.equal(lower.body.intentosRestantes, 0);
+  const exceeded = await f.submit().expect(409);
+  assert.equal(exceeded.body.error.code, "ATTEMPT_LIMIT");
+  const reload = await api.get(`/api/lecciones/${f.quiz.id}`).set(auth(accounts.student)).expect(200);
+  assert.equal(reload.body.progreso.intentos, 3);
+  assert.equal(reload.body.progreso.mejorNota, 100);
+  assertNoAnswer(lower.body);
+  assertNoAnswer(reload.body);
+  await api.post(`/api/lecciones/${f.last.id}/completar`).set(auth(accounts.student)).expect(200);
+  assert.equal((await f.enrollment.reload()).completado, true);
+});
+
+test("intentos: tres fallos agotan intentos sin desbloquear", async () => {
+  const f = await attemptFixture();
+  for (let i = 1; i <= 3; i++) {
+    const result = await f.submit(f.answers(1)).expect(200);
+    assert.equal(result.body.intentos, i);
+  }
+  await f.submit().expect(409);
+  await api.get(`/api/lecciones/${f.last.id}`).set(auth(accounts.student)).expect(403);
+  assert.equal((await f.enrollment.reload()).completado, false);
+});
+
+test("intentos: entradas incompletas, duplicadas, ajenas y notas manipuladas no consumen intentos", async () => {
+  const f = await attemptFixture();
+  const valid = f.answers();
+  for (const data of [
+    {}, { respuestas: [] }, { ...valid, nota: 100 }, { ...valid, estudianteId: 1 },
+    { respuestas: [valid.respuestas[0]] },
+    { respuestas: [valid.respuestas[0], valid.respuestas[0]] },
+    { respuestas: [valid.respuestas[0], { preguntaId: 2147483647, indiceElegido: 0 }] },
+    { respuestas: valid.respuestas.map((row) => ({ ...row, indiceElegido: 2 })) },
+    { respuestas: valid.respuestas.map((row) => ({ ...row, indiceElegido: -1 })) },
+    { respuestas: valid.respuestas.map((row) => ({ ...row, indiceElegido: "0" })) },
+    { respuestas: valid.respuestas.map((row) => ({ ...row, indiceCorrecto: 0 })) },
+  ]) await f.submit(data).expect(422);
+  assert.equal(await Progreso.count({ where: { inscripcionId: f.enrollment.id } }), 0);
+});
+
+test("intentos: autenticación, rol, inscripción, tipo y secuencia obligatorios", async () => {
+  const f = await attemptFixture({ prefix: true });
+  const path = `/api/lecciones/${f.quiz.id}/intentos`;
+  await api.post(path).send(f.answers()).expect(401);
+  await api.post(path).set(auth(accounts.teacher)).send(f.answers()).expect(403);
+  const another = await Usuario.findOne({ where: { email: "maria@miniaula.test" } });
+  const token = jwt.sign({}, process.env.JWT_SECRET, { subject: String(another.id), expiresIn: "1h" });
+  await api.post(path).set(auth({ token })).send(f.answers()).expect(403);
+  await f.submit().expect(403);
+  await api.post(`/api/lecciones/${f.first.id}/intentos`).set(auth(accounts.student)).send(f.answers()).expect(409);
+  await api.post(`/api/lecciones/${f.first.id}/completar`).set(auth(accounts.student)).expect(200);
+  await f.submit().expect(200);
+});
+
+test("intentos: escala, umbral exacto sin aprobar por redondeo y mínimo cero", async () => {
+  const f = await attemptFixture({ count: 3, threshold: 67 });
+  const data = f.answers();
+  data.respuestas[2].indiceElegido = 1;
+  const result = await f.submit(data).expect(200);
+  assert.equal(result.body.nota, 67);
+  assert.equal(result.body.aprobado, false);
+  assert.equal(result.body.progreso.lecciones[0].completada, false);
+  const zero = await attemptFixture({ threshold: 0 });
+  assert.equal((await zero.submit(zero.answers(1)).expect(200)).body.aprobado, true);
+  const empty = await attemptFixture({ count: 0 });
+  await empty.submit({ respuestas: [{ preguntaId: f.questions[0].id, indiceElegido: 0 }] }).expect(409);
+});
+
+test("panel: sin datos, privacidad y permisos del dueño", async () => {
+  const course = await Curso.create({ ...courseData, instructorId: accounts.teacher.usuario.id });
+  const path = `/api/instructor/cursos/${course.id}/resumen`;
+  await api.get(path).expect(401);
+  await api.get(path).set(auth(accounts.student)).expect(403);
+  await api.get(path).set(auth(accounts.other)).expect(403);
+  await api.get("/api/instructor/cursos/2147483647/resumen").set(auth(accounts.teacher)).expect(404);
+  const response = await api.get(path).set(auth(accounts.teacher)).expect(200);
+  assert.equal(response.body.inscritos, 0);
+  assert.equal(response.body.progresoPromedio, 0);
+  assert.equal(response.body.notaPromedio, null);
+  assert.deepEqual(response.body.detenciones, []);
+  assertNoAnswer(response.body);
+});
+
+test("panel: agrega progreso, mejores notas intentadas y primera lección pendiente sin datos personales", async () => {
+  const f = await attemptFixture();
+  const other = await Usuario.findOne({ where: { email: "maria@miniaula.test" } });
+  await Inscripcion.create({ cursoId: f.course.id, estudianteId: other.id });
+  await f.submit().expect(200);
+  const path = `/api/instructor/cursos/${f.course.id}/resumen`;
+  const response = await api.get(path).set(auth(accounts.teacher)).expect(200);
+  assert.equal(response.body.inscritos, 2);
+  assert.equal(response.body.progresoPromedio, 25);
+  assert.equal(response.body.notaPromedio, 100);
+  assert.equal(response.body.cuestionariosIntentados, 1);
+  assert.deepEqual(response.body.detenciones.map((row) => row.estudiantes), [1, 1]);
+  assert.equal(JSON.stringify(response.body).includes("estudianteId"), false);
+  await api.post(`/api/lecciones/${f.last.id}/completar`).set(auth(accounts.student)).expect(200);
+  const finished = await api.get(path).set(auth(accounts.teacher)).expect(200);
+  assert.equal(finished.body.completados, 1);
+  assert.equal(finished.body.progresoPromedio, 50);
+  assert.deepEqual(finished.body.detenciones.map((row) => row.estudiantes), [1, 0]);
+});
+
+test("intentos concurrentes: nunca exceden tres ni pierden la mejor nota", {
+  skip: process.env.API_TEST_POSTGRES !== "true",
+}, async () => {
+  const f = await attemptFixture();
+  const results = await Promise.all(Array.from({ length: 6 }, () => f.submit()));
+  assert.equal(results.filter((row) => row.status === 200).length, 3);
+  assert.equal(results.filter((row) => row.status === 409).length, 3);
+  const saved = await Progreso.findOne({ where: { inscripcionId: f.enrollment.id, leccionId: f.quiz.id } });
+  assert.equal(saved.intentos, 3);
+  assert.equal(saved.mejorNota, 100);
+  assert.equal(await Progreso.count({ where: { inscripcionId: f.enrollment.id } }), 1);
+});
+
+test("publicación e inscripción: rechazan cuestionarios sin preguntas para no congelar un curso imposible", async () => {
+  const course = await Curso.create({ ...courseData, instructorId: accounts.teacher.usuario.id });
+  const quiz = await Leccion.create({ titulo: "Vacío", tipo: "cuestionario", orden: 1, cursoId: course.id });
+  const publish = `/api/cursos/${course.id}/estado`;
+  await api.patch(publish).set(auth(accounts.teacher)).send({ estado: "publicado" }).expect(409);
+  await course.update({ estado: "publicado" });
+  await api.post(`/api/cursos/${course.id}/inscripcion`).set(auth(accounts.student)).expect(409);
+  await Pregunta.create({ leccionId: quiz.id, enunciado: "Pregunta", opciones: ["A", "B"], indiceCorrecto: 0 });
+  await api.patch(publish).set(auth(accounts.teacher)).send({ estado: "publicado" }).expect(200);
+  await api.post(`/api/cursos/${course.id}/inscripcion`).set(auth(accounts.student)).expect(201);
 });

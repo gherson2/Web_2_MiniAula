@@ -6,16 +6,11 @@ import { chromium } from "@playwright/test";
 import { createServer } from "vite";
 import { exerciseQuizAuthoring } from "./quiz-authoring.mjs";
 
-process.env.NODE_ENV = "test";
-process.env.DB_TEST_MEMORY = "true";
-process.env.JWT_SECRET = randomBytes(48).toString("hex");
-process.env.SEED_PASSWORD = "DemoAula2026!";
-process.env.FRONTEND_ORIGIN = "http://127.0.0.1:5175";
-
-const { app } = await import("../../api/app.js");
-const { sequelize } = await import("../../api/models/index.js");
-const { migrate } = await import("../../api/database/migrate.js");
-const { seed } = await import("../../api/database/seed.js");
+const external = process.env.E2E_EXTERNAL_URL?.replace(/\/$/, "");
+if (external && process.env.E2E_ALLOW_WRITE !== "true") {
+  throw new Error("El recorrido crea usuarios e inscripciones. Usa solo un despliegue temporal y E2E_ALLOW_WRITE=true.");
+}
+let sequelize;
 let browser;
 let vite;
 let server;
@@ -26,17 +21,30 @@ async function checkWidth(page) {
     `No debe existir desbordamiento horizontal en ${page.url()}`);
 }
 try {
-  await migrate();
-  await seed();
-  server = await new Promise((done) => {
-    const instance = app.listen(0, "127.0.0.1", () => done(instance));
-  });
-  process.env.VITE_API_URL = `http://127.0.0.1:${server.address().port}/api`;
-  vite = await createServer({
-    root: fileURLToPath(new URL("../", import.meta.url)),
-    server: { host: "127.0.0.1", port: 5175, strictPort: true },
-  });
-  await vite.listen();
+  if (external) {
+    process.env.VITE_API_URL = `${external}/api`;
+  } else {
+    process.env.NODE_ENV = "test";
+    process.env.DB_TEST_MEMORY = "true";
+    process.env.JWT_SECRET = randomBytes(48).toString("hex");
+    process.env.SEED_PASSWORD = "DemoAula2026!";
+    process.env.FRONTEND_ORIGIN = "http://127.0.0.1:5175";
+    const { app } = await import("../../api/app.js");
+    ({ sequelize } = await import("../../api/models/index.js"));
+    const { migrate } = await import("../../api/database/migrate.js");
+    const { seed } = await import("../../api/database/seed.js");
+    await migrate();
+    await seed();
+    server = await new Promise((done) => {
+      const instance = app.listen(0, "127.0.0.1", () => done(instance));
+    });
+    process.env.VITE_API_URL = `http://127.0.0.1:${server.address().port}/api`;
+    vite = await createServer({
+      root: fileURLToPath(new URL("../", import.meta.url)),
+      server: { host: "127.0.0.1", port: 5175, strictPort: true },
+    });
+    await vite.listen();
+  }
   browser = await chromium.launch({
     channel: process.env.PLAYWRIGHT_CHANNEL || (process.platform === "win32" ? "msedge" : undefined),
     headless: true,
@@ -47,7 +55,7 @@ try {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await mkdir(results, { recursive: true });
-  const base = "http://127.0.0.1:5175";
+  const base = external || "http://127.0.0.1:5175";
   await page.goto(base);
   await page.getByRole("heading", { name: "Node.js desde cero" }).waitFor();
   await page.screenshot({ path: `${results}/catalogo-escritorio.png`, fullPage: true });
@@ -92,6 +100,11 @@ try {
   await page.goto(editorUrl);
   await page.getByRole("heading", { name: "Información del curso" }).waitFor();
   const questionEditorUrl = await exerciseQuizAuthoring(page, base, results);
+  const quizEditorPath = await page.getByRole("link", { name: /Volver al editor del curso/ }).getAttribute("href");
+  const quizCourseId = quizEditorPath.match(/\/cursos\/(\d+)\/editar$/)[1];
+  await page.goto(`${base}${quizEditorPath}`);
+  await page.getByRole("button", { name: "Publicar curso", exact: true }).click();
+  await page.getByText("Publicado", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Salir", exact: true }).click();
   await page.waitForURL("**/login");
   await page.goto(`${base}/registro`);
@@ -172,13 +185,48 @@ try {
   await page.getByRole("heading", { name: "Esta sección es para instructores" }).waitFor();
   await page.goto(questionEditorUrl);
   await page.getByRole("heading", { name: "Esta sección es para instructores" }).waitFor();
+  await page.goto(`${base}/cursos/${quizCourseId}`);
+  await page.getByRole("button", { name: "Inscribirme en este curso" }).click();
+  await page.getByText("Tu inscripción se guardó correctamente.", { exact: true }).waitFor();
+  await page.goto(`${base}/aprender/${quizCourseId}`);
+  await page.getByRole("radio", { name: "Falso", exact: true }).click();
+  await page.getByRole("button", { name: "Enviar respuestas", exact: true }).click();
+  await page.getByText(/No alcanzaste la nota mínima/).waitFor();
+  await page.reload();
+  await page.getByText(/Intentos utilizados: 1 \/ 3/).waitFor();
+  await page.getByRole("radio", { name: "Verdadero", exact: true }).click();
+  await page.getByRole("button", { name: "Enviar respuestas", exact: true }).click();
+  await page.getByText("Cuestionario aprobado.", { exact: true }).waitFor();
+  await page.getByText("Completaste todas las lecciones de este curso.", { exact: true }).waitFor();
+  await page.reload();
+  await page.getByText("Mejor nota: 100 / 100", { exact: true }).waitFor();
+  await page.getByText(/Intentos utilizados: 2 \/ 3/).waitFor();
   await checkWidth(page);
+  await page.screenshot({ path: `${results}/cuestionario-aprobado-movil.png`, fullPage: true });
+  await page.getByRole("radio", { name: "Falso", exact: true }).click();
+  await page.getByRole("button", { name: "Intentar mejorar nota", exact: true }).click();
+  await page.getByText("Ya utilizaste los tres intentos.", { exact: true }).waitFor();
+  await page.getByText("Mejor nota: 100 / 100", { exact: true }).waitFor();
+  await page.getByText("Cuestionario aprobado.", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Salir", exact: true }).click();
+  await page.waitForURL("**/login");
+  await page.getByLabel("Correo electrónico").fill("ana@miniaula.test");
+  await page.getByLabel("Contraseña").fill("DemoAula2026!");
+  await page.getByRole("button", { name: /Iniciar sesión/ }).click();
+  await page.waitForURL("**/instructor/cursos");
+  await page.goto(`${base}/instructor/cursos/${quizCourseId}/resumen`);
+  await page.getByRole("heading", { name: "Nota promedio", exact: true }).waitFor();
+  await page.getByText("100 / 100", { exact: true }).waitFor();
+  await page.getByText("100 %", { exact: true }).waitFor();
+  await checkWidth(page);
+  await page.screenshot({ path: `${results}/panel-instructor-movil.png`, fullPage: true });
   assert.deepEqual(errors, [], "No debe haber excepciones de JavaScript en el navegador.");
-  console.log("E2E correcto: cursos, cuestionarios, nota mínima, CRUD de preguntas sin revelar claves, permisos, inscripción, completados, Mis cursos y repaso; móvil 375px sin desbordamiento.");
+  console.log("E2E correcto: autoría, inscripción, progreso, reprobar/aprobar, tres intentos, mejor nota persistida y panel del instructor; móvil 375px sin desbordamiento.");
   console.log("Capturas guardadas en web/test-results/.");
+  if (external) console.log("Recorrido ejecutado contra el despliegue externo temporal, sin API ni BD de memoria.");
 } finally {
   await browser?.close();
   await vite?.close();
   if (server) await new Promise((done) => server.close(done));
-  await sequelize.close();
+  await sequelize?.close();
 }

@@ -10,6 +10,11 @@ export function summarizeProgress(lessons, progress) {
     const status = {
       id: lesson.id, titulo: lesson.titulo, tipo: lesson.tipo, orden: lesson.orden,
       notaMinima: lesson.notaMinima, bloqueada: !previousComplete, completada: completed,
+      ...(lesson.tipo === "cuestionario" ? {
+        intentos: saved?.intentos || 0,
+        intentosRestantes: Math.max(0, 3 - (saved?.intentos || 0)),
+        mejorNota: saved?.intentos > 0 ? saved.mejorNota : null,
+      } : {}),
     };
     previousComplete = previousComplete && completed;
     return status;

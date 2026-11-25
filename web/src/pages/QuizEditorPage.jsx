@@ -37,7 +37,7 @@ export function QuizEditorPage() {
     <h1 className="detail-title">{leccion.titulo}</h1>
     <p className="text-secondary">Nota mínima: {leccion.notaMinima} / 100 · {pagination.total} {pagination.total === 1 ? "pregunta" : "preguntas"}</p>
     <div className="stage-notice mb-4">Aquí puedes preparar las preguntas y definir su respuesta correcta.
-      Las claves nunca se devuelven por la API. Rendir y calificar cuestionarios corresponde a la siguiente etapa.</div>
+      Las claves nunca se devuelven por la API. Los estudiantes inscritos pueden rendir hasta tres intentos.</div>
     <ErrorAlert message={error} />
     {message && <div className="alert alert-success" role="status">{message}</div>}
     <div className="surface-panel">

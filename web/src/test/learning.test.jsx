@@ -89,10 +89,10 @@ it("aula: el texto se escapa y un video con protocolo inseguro no crea un enlace
   expect(screen.queryByRole("link", { name: /Abrir enlace del video/ })).not.toBeInTheDocument();
 });
 
-it("aula: no ofrece rendir o completar un cuestionario como si fuera contenido", async () => {
+it("aula: un cuestionario vacío no se puede completar como contenido", async () => {
   LearningService.lesson.mockResolvedValue({ ...lesson, tipo: "cuestionario" });
   wrap();
-  expect(await screen.findByText(/La opción para rendirlo y recibir una nota/)).toBeInTheDocument();
+  expect(await screen.findByText(/El cuestionario todavía no tiene preguntas/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Completar|Enviar respuestas|Rendir/ })).not.toBeInTheDocument();
 });
 

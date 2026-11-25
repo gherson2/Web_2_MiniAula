@@ -3,7 +3,7 @@ import * as controller from "../controllers/learning.controller.js";
 import { authenticate, requireRole } from "../middlewares/auth.middleware.js";
 import { enrolledCourse, enrolledLesson } from "../middlewares/learning.middleware.js";
 import { validate } from "../middlewares/validate.middleware.js";
-import { idParams, emptyQuery, emptyBody } from "../validators/schemas.js";
+import { idParams, emptyQuery, emptyBody, attemptBody } from "../validators/schemas.js";
 
 const router = Router();
 const student = [authenticate, requireRole("estudiante")];
@@ -12,4 +12,6 @@ router.get("/cursos/:id/progreso", ...student, validate(params), enrolledCourse,
 router.get("/lecciones/:id", ...student, validate(params), enrolledLesson, controller.lesson);
 router.post("/lecciones/:id/completar", ...student,
   validate({ ...params, body: emptyBody.default({}) }), enrolledLesson, controller.complete);
+router.post("/lecciones/:id/intentos", ...student,
+  validate({ ...params, body: attemptBody }), enrolledLesson, controller.attempt);
 export default router;

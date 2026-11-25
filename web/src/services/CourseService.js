@@ -6,6 +6,7 @@ export const CourseService = {
   detail: async (id, signal) => (await api.get(`/cursos/${id}`, { signal })).data,
   mine: async (params, signal) => (await api.get("/instructor/cursos", { params, signal })).data,
   editDetail: async (id, signal) => (await api.get(`/instructor/cursos/${id}`, { signal })).data,
+  summary: async (id, signal) => (await api.get(`/instructor/cursos/${id}/resumen`, { signal })).data,
   create: async (data) => (await api.post("/cursos", data)).data,
   update: async (id, data) => (await api.put(`/cursos/${id}`, data)).data,
   state: async (id, estado) => (await api.patch(`/cursos/${id}/estado`, { estado })).data,

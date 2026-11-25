@@ -1,6 +1,6 @@
 import { Op } from "sequelize";
 import { Curso, Usuario, Inscripcion, Leccion, Progreso } from "../models/index.js";
-import { withCourseLock } from "./course.service.js";
+import { withCourseLock, ensureReady } from "./course.service.js";
 import { AppError } from "../utils/AppError.js";
 import { summarizeProgress } from "../utils/progress.js";
 
@@ -15,6 +15,7 @@ export function enroll(courseId, studentId) {
       where: { cursoId: courseId, estudianteId: studentId }, transaction,
     });
     if (existing) throw new AppError(409, "ALREADY_ENROLLED", "Ya estás inscrito en este curso.");
+    await ensureReady(courseId, transaction);
     const enrollment = await Inscripcion.create({
       cursoId: courseId, estudianteId: studentId,
     }, { transaction });
