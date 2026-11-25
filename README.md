@@ -2,7 +2,8 @@
 MiniAula — Ingeniería Web 2
 Plataforma de cursos cortos con roles de instructor y estudiante.
 
-Versión en desarrollo con aula y progreso del estudiante. El proyecto todavía no es una entrega final.
+Funcionalidades RF-01 a RF-16 implementadas y verificadas en Docker/PostgreSQL.
+La entrega final requiere completar las evidencias de los integrantes y preparar la defensa.
 
 Ver AVANCE.md para el alcance y lo pendiente.
 
@@ -33,13 +34,12 @@ Consultar el avance en el aula y conservarlo al recargar, sin duplicar completad
 
 Consultar el avance real de cada curso en Mis cursos, con barra y acciones para empezar, continuar o repasar.
 
-**Todavía no puedes rendir cuestionarios ni consultar las estadísticas del instructor.**
+Rendir cuestionarios con calificación en servidor, hasta tres intentos y mejor nota persistida.
 
-Los cuestionarios del seed preparan los datos de la
+Consultar estadísticas de cursos propios: inscritos, completados, progreso y nota promedio,
+y la primera lección pendiente de los estudiantes.
 
-siguiente etapa; su existencia no significa que el módulo esté terminado.
-
-Funcionalidades incorporadas: progreso del estudiante
+Funcionalidades incorporadas: progreso, evaluaciones y estadísticas
 Se añade el aula del estudiante: acceso por inscripción, lectura de texto/video y
 
 bloqueo secuencial en servidor. La primera lección se abre al inscribirse; para abrir
@@ -50,8 +50,8 @@ El progreso se consulta con GET /api/cursos/:id/progreso y se guarda al completa
 contenido con POST /api/lecciones/:id/completar. La API calcula el resumen:
 
 no acepta que el cliente indique el porcentaje, la inscripción o la nota.
-El instructor ya puede preparar las preguntas; el estudiante todavía no puede
-verlas ni enviar intentos. El endpoint de completar contenido no aprueba cuestionarios.
+El estudiante recibe preguntas sin claves solo si está inscrito y la lección está
+desbloqueada. El endpoint de completar contenido no aprueba cuestionarios.
 
 Editor del instructor: al crear una lección elige Contenido o Cuestionario.
 Para un cuestionario indica una nota mínima entera entre 0 y 100. Después de guardarlo,
@@ -62,6 +62,30 @@ La API nunca devuelve la clave guardada, ni al instructor: al editar debe selecc
 nuevamente. Los cursos con inscritos conservan preguntas y nota mínima sin cambios.
 El tipo de una lección guardada no se cambia; crea otra si necesitas un tipo diferente.
 
+Rendir en el aula: selecciona una opción por pregunta y pulsa Enviar respuestas.
+POST /api/lecciones/:id/intentos recibe respuestas con preguntaId e indiceElegido
+(índice desde cero). No acepta notas del cliente. Las respuestas deben cubrir
+exactamente todas las preguntas, sin repetidas, ajenas ni opciones inexistentes.
+Los errores de validación no consumen intentos.
+
+Cada envío válido consume uno de los tres intentos, incluso después de aprobar.
+La nota mostrada es el porcentaje de aciertos redondeado a un entero; la aprobación
+compara la proporción exacta con la nota mínima (2/3 no aprueba un mínimo de 67).
+Una nota menor posterior no elimina la mejor nota ni una aprobación anterior.
+Al aprobar se desbloquea la siguiente lección; al completar todas termina el curso.
+Recargar no restablece los intentos. No se devuelven claves ni correcciones por pregunta.
+Ante un error de conexión, recarga para consultar el estado antes de reenviar:
+una solicitud puede haberse guardado aunque no haya llegado su respuesta.
+
+Panel del instructor: usa Ver estadísticas desde la tarjeta o el editor del curso.
+GET /api/instructor/cursos/:id/resumen exige sesión de su instructor propietario.
+El progreso promedio incluye todos los inscritos; sin inscritos es 0.
+La nota promedio usa la mejor nota de cada cuestionario intentado por estudiante,
+no inventa ceros para los no intentados y es null cuando no hay notas.
+El punto de detención es la primera lección pendiente de cada estudiante, no una
+afirmación de abandono. Quienes completaron el curso no suman detenciones.
+El panel muestra agregados, no identidades ni calificaciones individuales.
+
 Mis cursos usa el mismo cálculo del aula. Su respuesta incluye completadas, total,
 porcentaje y completado de cada inscripción del usuario autenticado. Los cursos
 archivados conservan su progreso. La lista carga lecciones y progresos en lote,
@@ -69,9 +93,10 @@ sin una consulta adicional por cada tarjeta ni datos privados de otros estudiant
 
 La carpeta completa Downloads/26 no se modificó.
 
-**La nueva versión con guardado de progreso aún no fue reconstruida en Docker porque el motor
+**Versión actual reconstruida y verificada en Docker el 25 de noviembre de 2026.**
 
-estaba apagado.** Enciende Docker Desktop y ejecuta docker compose up --build.
+Los tres servicios están saludables. Pasaron 63 pruebas con PostgreSQL real y el
+recorrido completo de evaluaciones y panel con React compilado servido por Nginx.
 
 Se mantiene el proyecto Compose miniaula-avance45 para conservar el mismo volumen.
 
@@ -282,6 +307,8 @@ La API verifica rol y propiedad en servidor. No permite cambiar instructor o rol
   mediante los formularios de edición.
 
 No se publica un curso vacío ni se elimina la última lección de uno publicado.
+Publicar y admitir inscripciones exige al menos una pregunta por cuestionario,
+para no congelar un curso que ningún estudiante pueda terminar.
 
 Si hay inscritos, el curso no se elimina y no se cambia su estructura: se puede
 
@@ -305,11 +332,17 @@ El bloqueo comprueba todas las lecciones previas. Un cuestionario previo exige
   completada y mejorNota >= notaMinima. Los inscritos conservan acceso al archivar.
 
 El aula representa texto escapado por React y enlaces HTTP/HTTPS seguros;
-  no ejecuta HTML del instructor. Completar contenido guarda progreso real; rendir cuestionarios sigue pendiente.
+  no ejecuta HTML del instructor. Completar contenido y rendir cuestionarios guardan progreso real.
 
 Completar usa una transacción y bloquea la inscripción en PostgreSQL. Repetir la
   petición devuelve el mismo progreso sin crear otra fila. El curso se marca como
   completado únicamente cuando todas sus lecciones están completadas.
+
+Rendir usa el mismo bloqueo de inscripción que completar: cuenta intentos,
+califica y actualiza progreso y curso en una sola transacción. La consulta de
+claves es interna y se proyectan explícitamente los campos de todas las respuestas HTTP.
+El panel usa una instantánea REPEATABLE READ para no mezclar distintos estados
+durante el cálculo. Las pruebas en memoria no verifican bloqueos ni aislamiento.
 
 Pruebas
 Después de instalar las dependencias:
@@ -326,9 +359,9 @@ Las pruebas de API usan pg-mem, aislado de tu PostgreSQL: verifican migración,
 
 seed, autenticación, filtros, permisos, privacidad, contenido e inscripciones.
 
-En memoria se aprueban 52 pruebas y se omiten dos de concurrencia. El frontend tiene
+En memoria se aprueban 60 pruebas y se omiten tres de concurrencia. El frontend tiene
 
-51 pruebas aprobadas. El recorrido de navegador incluye contenido desbloqueado,
+61 pruebas aprobadas. El recorrido de navegador incluye contenido desbloqueado,
 
 bloqueo 403, guardar completados, desbloquear, recargar, no duplicar y terminar un curso de contenido, a 375px.
 
@@ -337,6 +370,14 @@ su coherencia con el aula, privacidad, cursos archivados y consultas por página
 
 El recorrido de cuestionarios verifica creación, nota mínima, CRUD de preguntas,
 persistencia al recargar y claves ausentes en respuestas HTTP, también a 375px.
+Además verifica reprobar, aprobar, conservar mejor nota tras un fallo posterior,
+agotar tres intentos, terminar un curso con cuestionario y consultar el panel.
+Las pruebas API incluyen entradas manipuladas, permisos, escala y umbral exacto,
+persistencia, desbloqueo y estadísticas sin datos o con varios estudiantes.
+
+Con PostgreSQL 16 real se aprobaron las 63 pruebas, sin omisiones, incluida la
+concurrencia de inscripciones, completados e intentos. Se usó una base temporal
+separada, eliminada al terminar, no la base habitual.
 
 Ese adaptador no prueba el bloqueo ni las garantías de rollback de PostgreSQL real.
 
@@ -372,6 +413,32 @@ Utiliza las cuentas de demostración. Si cambiaste URL o credenciales, configura
 
 DOCKER_TEST_URL, DOCKER_TEST_EMAIL y DOCKER_TEST_PASSWORD antes de ejecutarla.
 
+Recorrido completo de Docker desde cero, en un despliegue desechable (PowerShell):
+
+```powershell
+$proyecto = "miniaula-verificacion-" + [guid]::NewGuid().ToString("N").Substring(0, 8)
+try {
+    docker compose -p $proyecto -f docker-compose.verify.yml up --build -d --wait
+    if ($LASTEXITCODE -ne 0) { throw "No se pudo iniciar el despliegue temporal." }
+    $direccion = docker compose -p $proyecto -f docker-compose.verify.yml port web 80
+    $env:E2E_EXTERNAL_URL = "http://" + $direccion.Trim()
+    $env:E2E_ALLOW_WRITE = "true"
+    npm --prefix web run test:e2e
+    if ($LASTEXITCODE -ne 0) { throw "Falló el recorrido de navegador." }
+} finally {
+    docker compose -p $proyecto -f docker-compose.verify.yml down
+    Remove-Item Env:E2E_EXTERNAL_URL, Env:E2E_ALLOW_WRITE -ErrorAction SilentlyContinue
+}
+```
+
+Esta modalidad usa PostgreSQL real con datos temporales en tmpfs, sin montar
+el volumen habitual; publica el frontend solo en un puerto libre de localhost.
+Requiere las dependencias del frontend y Edge/Chromium. El recorrido crea usuarios,
+cursos e inscripciones: no apuntes E2E_EXTERNAL_URL a una instalación con datos
+que quieras conservar. Se exige E2E_ALLOW_WRITE=true para habilitar ese modo.
+Se verificaron inscripción, bloqueo, progreso, cuestionarios reprobados/aprobados,
+tres intentos, mejor nota persistida y estadísticas, sin desbordamiento a 375px.
+
 Verificación anterior de Docker
 La versión anterior se construyó y arrancó con Compose con los tres servicios
 
@@ -403,9 +470,9 @@ inscripciones simultáneas con una sola fila creada. También pasaron 19 pruebas
 
 recorrido en navegador con inscripción, lista privada y persistencia al recargar.
 
-El guardado de progreso tiene pruebas aisladas aprobadas; falta repetir la comprobación de
-
-Docker/PostgreSQL real. No se atribuyen los resultados anteriores al código nuevo.
+La versión actual también pasó la reconstrucción del despliegue habitual, test:docker,
+las 63 pruebas API sobre PostgreSQL real y el recorrido completo en Docker temporal.
+La evidencia anterior se conserva como historial; ver AVANCE.md para los resultados actuales.
 
 Para repetir las pruebas de API sobre una
 
@@ -460,6 +527,15 @@ Recargar y verificar que se conserva el progreso. Repetir no debe sumar otra vez
 Completar todas las lecciones de un curso de contenido y comprobar el estado final.
     Un cuestionario pendiente no se puede saltar con el botón de completar.
 
+Crear un curso con contenido, cuestionario y contenido final. Agregar preguntas,
+definir la nota mínima y publicar. Como estudiante, completar el contenido previo,
+reprobar y comprobar que el final sigue bloqueado. Aprobar y comprobar el desbloqueo.
+Recargar para ver mejor nota e intentos persistidos. Un tercer intento menor no
+borra la aprobación; un cuarto envío debe rechazarse con 409.
+
+Como instructor propietario, abrir Ver estadísticas y contrastar inscritos,
+progreso, mejor nota promedio y primera lección pendiente. Otro instructor no entra.
+
 Trabajo en pareja y entrega final
 Ambos integrantes deben trabajar en backend y frontend, en ramas y pull requests
 
@@ -467,12 +543,10 @@ con revisión del compañero. Este avance no crea commits, PRs ni contribuciones
 
 Pendiente para la entrega:
 
-RF-15 y RF-16: rendir, intentos y calificación en servidor y panel del instructor.
+RF-01 a RF-16 y RN-01 a RN-08 implementados; ver AVANCE.md y Swagger para evidencia.
 
-Completar la documentación con esos endpoints y las pruebas de RN-01 a RN-08.
+Preparar la defensa individual y repetir la demostración en la máquina del docente.
 
-Verificar el arranque en Docker desde cero y preparar la defensa individual.
-
-Video de 5 a 8 minutos con ambos integrantes. Enlace: pendiente.
+Video de 5 a 8 minutos con ambos integrantes, a cargo del usuario. Enlace: pendiente.
 
 Tag v1.0.0 únicamente cuando el proyecto final esté completo y verificado.

@@ -17,6 +17,9 @@ const options = {
 if (process.env.NODE_ENV === "test" && process.env.DB_TEST_MEMORY === "true") {
   const { newDb, DataType } = await import("pg-mem");
   const memory = newDb({ autoCreateForeignKeyIndices: true, noAstCoverageCheck: true });
+  // pg-mem no implementa aislamiento real; su verificación requiere PostgreSQL.
+  memory.public.interceptQueries((sql) =>
+    /^SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;?$/i.test(sql.trim()) ? [] : null);
   memory.public.registerFunction({
     name: "current_database", returns: DataType.text, implementation: () => "miniaula_test",
   });

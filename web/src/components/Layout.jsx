@@ -30,6 +30,6 @@ export function Layout() {
     </header>
     <main className="container page-main"><Outlet /></main>
     <footer className="site-footer container"><span>MiniAula · Pequeños pasos, grandes aprendizajes.</span>
-      <span className="stage-badge">Avance · Aula del estudiante</span></footer>
+      <span className="stage-badge">Cursos · Evaluaciones · Progreso</span></footer>
   </>;
 }

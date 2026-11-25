@@ -36,7 +36,7 @@ export function CourseDetailPage() {
             <div className="stage-notice">Ya puedes inscribirte y guardar este curso en tu lista.
               Si estás inscrito, puedes leer las lecciones desbloqueadas en el aula.
               También puedes completar el contenido para desbloquear la siguiente lección.
-              Rendir cuestionarios sigue pendiente.</div>
+               Aprueba los cuestionarios en el aula con hasta tres intentos por evaluación.</div>
             {user?.rol === "estudiante" && <EnrollmentPanel key={`${user.id}:${course.id}`} courseId={course.id} />}
             {user?.id === course.instructorId && <Link className="btn btn-primary w-100 mt-3" to={`/instructor/cursos/${id}/editar`}>Editar mi curso →</Link>}
             {!user && <Link className="btn btn-outline-primary w-100 mt-3" to="/registro">Crear una cuenta</Link>}

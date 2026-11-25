@@ -7,3 +7,6 @@ export const lesson = async (req, res) => res.json(
 export const complete = async (req, res) => res.json(
   await learning.completeLesson(req.enrollment, req.validated.params.id),
 );
+export const attempt = async (req, res) => res.json(
+  await learning.submitAttempt(req.enrollment, req.validated.params.id, req.validated.body),
+);

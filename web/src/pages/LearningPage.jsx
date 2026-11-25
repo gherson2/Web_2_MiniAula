@@ -5,6 +5,7 @@ import { useResource } from "../hooks/useResource";
 import { Loading, ErrorAlert, EmptyState } from "../components/Feedback";
 import { errorMessage } from "../services/api";
 import { ProgressBar } from "../components/ProgressBar";
+import { QuizAttempt } from "../components/QuizAttempt";
 
 function videoLink(value) {
   try {
@@ -34,9 +35,7 @@ function LessonViewer({ lessonId, status, nextLesson, courseId, onCompleted }) {
   return <article className="surface-panel lesson-reader" aria-labelledby="lesson-heading">
     <span className="eyebrow">LECCIÓN {lesson.orden} · {lesson.tipo === "contenido" ? "CONTENIDO" : "CUESTIONARIO"}</span>
     <h2 id="lesson-heading" className="h3 mb-4">{lesson.titulo}</h2>
-    {lesson.tipo === "cuestionario" ? <div className="stage-notice">
-      Este es un cuestionario. La opción para rendirlo y recibir una nota se implementará en la siguiente etapa.
-    </div> : <>
+    {lesson.tipo === "cuestionario" ? <QuizAttempt lesson={lesson} status={status} onCompleted={onCompleted} /> : <>
       {video && <a className="btn btn-outline-primary mb-4" href={video} target="_blank" rel="noopener noreferrer">Abrir enlace del video ↗</a>}
       {lesson.contenido ? <div className="lesson-content">{lesson.contenido}</div> :
         <p className="text-secondary">Esta lección utiliza el enlace de video como material de estudio.</p>}

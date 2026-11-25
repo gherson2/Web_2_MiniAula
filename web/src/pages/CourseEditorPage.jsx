@@ -72,6 +72,7 @@ export function CourseEditorPage() {
       <div><span className="eyebrow">EDITOR DE CURSO</span><h1>{course.titulo}</h1>
         <span className={`status-badge status-${course.estado}`}>{stateLabels[course.estado]}</span></div>
       <div className="d-flex flex-wrap gap-2">
+        <Link className="btn btn-outline-primary" to={`/instructor/cursos/${id}/resumen`}>Ver estadísticas</Link>
         {course.estado === "publicado" && <Link className="btn btn-outline-secondary" to={`/cursos/${id}`}>Ver página pública ↗</Link>}
         {course.estado !== "publicado" && <button className="btn btn-primary" disabled={busy || editingLesson !== null}
           onClick={() => run(() => CourseService.state(id, "publicado"), "Tu curso ya está publicado.")}>Publicar curso</button>}

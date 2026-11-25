@@ -9,6 +9,7 @@ import { CourseEditorPage, NewCoursePage } from "./pages/CourseEditorPage";
 import { MyCoursesPage } from "./pages/MyCoursesPage";
 import { LearningPage } from "./pages/LearningPage";
 import { QuizEditorPage } from "./pages/QuizEditorPage";
+import { InstructorSummaryPage } from "./pages/InstructorSummaryPage";
 
 export default function App() {
   return <Routes><Route element={<Layout />}>
@@ -24,6 +25,7 @@ export default function App() {
       <Route path="/instructor/cursos" element={<CatalogPage key="instructor" instructor />} />
       <Route path="/instructor/cursos/nuevo" element={<NewCoursePage />} />
       <Route path="/instructor/cursos/:id/editar" element={<CourseEditorPage />} />
+      <Route path="/instructor/cursos/:id/resumen" element={<InstructorSummaryPage />} />
       <Route path="/instructor/lecciones/:id/preguntas" element={<QuizEditorPage />} />
     </Route>
     <Route element={<ProtectedRoute role="estudiante" />}>

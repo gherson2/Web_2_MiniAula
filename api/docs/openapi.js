@@ -39,8 +39,8 @@ function operation(summary, { auth = false, params = [], schema, status = 200 } 
 
 export const openapi = {
   openapi: "3.0.3",
-  info: { title: "MiniAula — editor de cuestionarios", version: "0.6.0",
-    description: "Incluye cursos, lecciones, progreso y preparación de cuestionarios con nota mínima y CRUD de preguntas. Las claves nunca se devuelven por HTTP, tampoco al instructor: al editar debe seleccionar nuevamente la respuesta correcta. El tipo de una lección guardada es inmutable y el contenido/preguntas de cursos inscritos no se modifican. Rendir/calificar cuestionarios y estadísticas siguen pendientes." },
+  info: { title: "MiniAula — cursos, evaluaciones y estadísticas", version: "1.0.0",
+    description: "Cursos, progreso secuencial, cuestionarios con calificación en servidor y estadísticas privadas del instructor. Hasta tres intentos por estudiante y cuestionario; se conserva la mejor nota y la aprobación. Las claves nunca se devuelven por HTTP, tampoco al instructor. El tipo de lección es inmutable y los cursos inscritos conservan su estructura y preguntas." },
   servers: [{ url: "/api" }],
   components: {
     securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" } },
@@ -81,7 +81,13 @@ export const openapi = {
     },
     "/instructor/cursos": { get: operation("Listar mis cursos, incluidos borradores", { auth: true, params: query }) },
     "/instructor/cursos/{id}": { get: operation("Contenido de mi curso para edición", { auth: true, params: [id] }) },
-    "/cursos/{id}/estado": { patch: operation("Publicar (mínimo una lección) o archivar", {
+    "/instructor/cursos/{id}/resumen": { get: {
+      ...operation("Estadísticas agregadas de mi curso: inscritos, progreso, mejores notas y primera lección pendiente", {
+        auth: true, params: [id],
+      }),
+      description: "Solo el instructor propietario. progresoPromedio incluye a todos los inscritos; sin inscritos es 0. notaPromedio promedia la mejor nota de cada cuestionario intentado por estudiante, excluyendo los no intentados; sin intentos es null. detenciones cuenta la primera lección pendiente por estudiante, no abandono. No incluye identidades ni notas individuales.",
+    } },
+    "/cursos/{id}/estado": { patch: operation("Publicar (mínimo una lección y preguntas en cada cuestionario) o archivar", {
       auth: true, params: [id], schema: object({ estado: { type: "string", enum: ["publicado", "archivado"] } }),
     }) },
     "/cursos/{id}/lecciones": { post: operation("Crear contenido o cuestionario con nota mínima en curso propio", {
@@ -119,6 +125,20 @@ export const openapi = {
       post: operation("Completar contenido desbloqueado y recibir progreso actualizado. Sin cuerpo; repetible sin duplicar. 403 bloqueada, 409 cuestionario.", {
         auth: true, params: [id],
       }),
+    },
+    "/lecciones/{id}/intentos": {
+      post: {
+        ...operation("Rendir cuestionario desbloqueado: nota calculada en servidor y progreso actualizado", {
+          auth: true, params: [id], schema: object({
+            respuestas: { type: "array", minItems: 1, maxItems: 100,
+              items: object({
+                preguntaId: { type: "integer", minimum: 1 },
+                indiceElegido: { type: "integer", minimum: 0, maximum: 5 },
+              }) },
+          }),
+        }),
+        description: "Enviar exactamente una respuesta por pregunta, con índices desde cero. Rechaza preguntas ajenas, repetidas u opciones inexistentes con 422 sin consumir intentos. Máximo tres envíos válidos, incluso después de aprobar; agotados devuelve 409. Se bloquea la inscripción en una transacción. Devuelve nota (0–100, redondeada), aprobado (comparación exacta sin redondeo), mejorNota, intentos, intentosRestantes y progreso. Una nota menor no elimina la aprobación. Nunca devuelve claves ni correcciones por pregunta. Un error de conexión puede ocurrir después de guardar: consultar progreso antes de reenviar.",
+      },
     },
     "/lecciones/{id}/preguntas": {
       get: operation("Preguntas de mi cuestionario, sin clave correcta; incluye metadatos y paginación", {

@@ -13,6 +13,7 @@ router.get("/categorias", validate({ query: emptyQuery }), controller.categories
 router.get("/cursos/:id", validate(params), controller.detail);
 router.get("/instructor/cursos", ...instructor, validate({ query: catalogQuery }), controller.mine);
 router.get("/instructor/cursos/:id", ...instructor, validate(params), ownCourse, controller.editDetail);
+router.get("/instructor/cursos/:id/resumen", ...instructor, validate(params), ownCourse, controller.summary);
 router.post("/cursos", ...instructor, validate({ body: courseBody, query: emptyQuery }), controller.create);
 router.put("/cursos/:id", ...instructor, validate({ ...params, body: courseBody }), ownCourse, controller.update);
 router.delete("/cursos/:id", ...instructor, validate(params), ownCourse, controller.remove);

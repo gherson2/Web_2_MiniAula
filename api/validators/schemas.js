@@ -9,6 +9,14 @@ const positiveId = z.coerce.number().int().positive().max(2147483647);
 export const idParams = z.object({ id: positiveId }).strict();
 export const emptyQuery = z.object({}).strict();
 export const emptyBody = z.object({}).strict();
+export const attemptBody = z.object({
+  respuestas: z.array(z.object({
+    preguntaId: z.number().int().positive().max(2147483647),
+    indiceElegido: z.number().int().min(0).max(5),
+  }).strict()).min(1).max(100)
+    .refine((rows) => new Set(rows.map((row) => row.preguntaId)).size === rows.length,
+      "No repitas preguntas."),
+}).strict();
 export const registerBody = z.object({
   nombre: text(100), email, password, rol: z.enum(["estudiante", "instructor"]),
 }).strict();

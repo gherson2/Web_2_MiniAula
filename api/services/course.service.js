@@ -1,5 +1,5 @@
 import { Op } from "sequelize";
-import { Curso, Leccion, Usuario, Inscripcion, sequelize } from "../models/index.js";
+import { Curso, Leccion, Usuario, Inscripcion, Pregunta, sequelize } from "../models/index.js";
 import { AppError } from "../utils/AppError.js";
 
 const instructor = { model: Usuario, as: "instructor", attributes: ["id", "nombre"] };
@@ -69,12 +69,25 @@ export async function ensureNoEnrollments(courseId, transaction) {
 
 export function changeState(id, estado) {
   return withCourseLock(id, async (course, transaction) => {
-    const lessons = await Leccion.count({ where: { cursoId: id }, transaction });
-    if (estado === "publicado" && lessons === 0) {
-      throw new AppError(409, "EMPTY_COURSE", "Agrega al menos una lección antes de publicar.");
-    }
+    if (estado === "publicado") await ensureReady(id, transaction);
     return course.update({ estado }, { transaction });
   });
+}
+
+export async function ensureReady(courseId, transaction) {
+  const lessons = await Leccion.findAll({
+    attributes: ["id", "tipo"], where: { cursoId: courseId }, transaction,
+  });
+  if (!lessons.length) throw new AppError(409, "EMPTY_COURSE", "Agrega al menos una lección antes de publicar.");
+  const quizIds = lessons.filter((lesson) => lesson.tipo === "cuestionario").map((lesson) => lesson.id);
+  if (!quizIds.length) return;
+  const questions = await Pregunta.findAll({
+    attributes: ["leccionId"], where: { leccionId: { [Op.in]: quizIds } }, transaction,
+  });
+  const ready = new Set(questions.map((row) => row.leccionId));
+  if (quizIds.some((id) => !ready.has(id))) {
+    throw new AppError(409, "EMPTY_QUIZ", "Agrega al menos una pregunta a cada cuestionario antes de publicar o admitir inscripciones.");
+  }
 }
 
 export function deleteCourse(id) {
