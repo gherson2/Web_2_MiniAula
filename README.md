@@ -7,6 +7,15 @@ La entrega final requiere completar las evidencias de los integrantes y preparar
 
 Ver AVANCE.md para el alcance y lo pendiente.
 
+## Video del proyecto
+
+[Ver la demostración en Google Drive](https://drive.google.com/drive/folders/17IY18XIExYk_ldhCp7bUDcNr9TxyFJSw?usp=sharing).
+
+Duración aproximada: 5 minutos y 15 segundos. Gerson narra la demostración y
+utiliza cuentas distintas de instructor y estudiante.
+
+El enlace abre una carpeta de Drive. El docente debe tener acceso al video que contiene.
+
 Qué puedes hacer
 Registrarte como estudiante o instructor, iniciar/cerrar sesión y editar tu perfil.
 
@@ -547,6 +556,7 @@ RF-01 a RF-16 y RN-01 a RN-08 implementados; ver AVANCE.md y Swagger para eviden
 
 Preparar la defensa individual y repetir la demostración en la máquina del docente.
 
-Video de 5 a 8 minutos con ambos integrantes, a cargo del usuario. Enlace: pendiente.
+Confirmar el acceso del docente al video enlazado arriba y acordar la entrega
+individual, ya que la consigna establece trabajo en pareja.
 
 Tag v1.0.0 únicamente cuando el proyecto final esté completo y verificado.
