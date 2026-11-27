@@ -9,12 +9,13 @@ Ver AVANCE.md para el alcance y lo pendiente.
 
 ## Video del proyecto
 
-[Ver la demostración en Google Drive](https://drive.google.com/drive/folders/17IY18XIExYk_ldhCp7bUDcNr9TxyFJSw?usp=sharing).
+[Ver la demostración en Google Drive](https://drive.google.com/file/d/1hR_crRMn72fbrRNZnjkxLKROr--dyr8G/view?usp=sharing).
 
-Duración aproximada: 5 minutos y 15 segundos. Gerson narra la demostración y
+Duración aproximada: 6 minutos y 36 segundos. Gerson narra la demostración y
 utiliza cuentas distintas de instructor y estudiante.
 
-El enlace abre una carpeta de Drive. El docente debe tener acceso al video que contiene.
+El enlace abre directamente el video completo, incluida la explicación del backend,
+el frontend y Docker en Visual Studio Code. El docente debe tener permiso para reproducirlo.
 
 Qué puedes hacer
 Registrarte como estudiante o instructor, iniciar/cerrar sesión y editar tu perfil.
